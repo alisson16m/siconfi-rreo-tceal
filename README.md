@@ -2,6 +2,9 @@
 
 **Tribunal de Contas do Estado de Alagoas (TCE-AL)**
 
+[![CI](https://github.com/alisson16m/siconfi-rreo-tceal/actions/workflows/ci.yml/badge.svg)](https://github.com/alisson16m/siconfi-rreo-tceal/actions/workflows/ci.yml)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://siconfi-gerador-de-relatorios.streamlit.app/)
+
 Ferramenta de apoio à auditoria que automatiza a consulta à [API pública do SICONFI](https://apidatalake.tesouro.gov.br/docs/siconfi/) e gera o **Apêndice I — Balanço Orçamentário (RREO Anexo 1, 6º Bimestre)** em XLSX e PDF para todos os 102 municípios de Alagoas e o Estado.
 
 ---
@@ -58,11 +61,15 @@ Acesse `http://localhost:8501` no navegador.
 python -m pytest --tb=short -q
 ```
 
+## Acesso ao app
+
+O app está publicado em: **https://siconfi-gerador-de-relatorios.streamlit.app/**
+
 ## Deploy no Streamlit Community Cloud
 
 1. Faça um fork deste repositório ou envie para um repositório público no GitHub.
-2. Acesse [share.streamlit.io](https://share.streamlit.io) e clique em **New app**.
-3. Selecione o repositório, a branch `main` e o arquivo `app.py`.
+2. Acesse [share.streamlit.io](https://share.streamlit.io) e clique em **Create app**.
+3. Selecione o repositório, a branch `master` e o arquivo `app.py`.
 4. Clique em **Deploy**. O Streamlit Cloud instalará as dependências de `requirements.txt` automaticamente com Python 3.11.
 
 ## Estrutura do projeto
