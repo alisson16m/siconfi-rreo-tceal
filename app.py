@@ -63,8 +63,8 @@ st.set_page_config(
 
 st.markdown(
     """<style>
-    div.block-container { padding-top: 0rem; margin-top: 0rem; }
-    section[data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem; }
+    div.block-container { padding-top: 1.5rem; }
+    section[data-testid="stSidebar"] > div:first-child { padding-top: 3rem; }
     </style>""",
     unsafe_allow_html=True,
 )
