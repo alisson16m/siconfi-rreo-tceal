@@ -43,6 +43,16 @@ def _fmt_brl(valor: float) -> str:
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _fmt_data_status(iso: str | None) -> str:
+    if not iso:
+        return ""
+    try:
+        dt = datetime.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S")
+        return dt.strftime("%d/%m/%Y às %H:%M:%S")
+    except ValueError:
+        return iso
+
+
 # ── Configuração da página ────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -82,10 +92,11 @@ with st.sidebar:
 
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
 
-st.title("Apêndice I — RREO Anexo 1")
+st.title("Dados de Execução Orçamentária")
 st.caption(
     "Tribunal de Contas do Estado de Alagoas · "
-    "Gerador automatizado de relatório de auditoria (6º Bimestre)"
+    "Dados com base no Balanço Orçamentário — Anexo I do Relatório Resumido "
+    "de Execução Orçamentária (RREO) do 6º Bimestre"
 )
 st.divider()
 
@@ -154,7 +165,7 @@ if _SK_XLSX in st.session_state:
     st.success(f"✅ Relatório gerado: **{nome}** — exercício **{ano}**")
 
     if data:
-        st.info(f"📅 Data de entrega no SICONFI: `{data}`")
+        st.info(f"📅 Data de entrega no SICONFI: `{_fmt_data_status(data)}`")
     else:
         st.warning("⚠️ Data de entrega não encontrada no SICONFI.")
 
@@ -198,6 +209,5 @@ else:
 st.divider()
 st.caption(
     "Dados obtidos da [API pública do SICONFI](https://apidatalake.tesouro.gov.br/docs/siconfi/) "
-    "(Secretaria do Tesouro Nacional). "
-    "Ferramenta de apoio à auditoria — não substitui análise técnica nem constitui fonte oficial."
+    "(Secretaria do Tesouro Nacional)."
 )

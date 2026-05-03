@@ -8,6 +8,7 @@ valores estáticos calculados a partir da API SICONFI e salva em output_path.
 
 import pathlib
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 
 import openpyxl
@@ -300,6 +301,16 @@ def build_xlsx(
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
 
+def _fmt_data_status(iso: str | None) -> str:
+    if not iso:
+        return ""
+    try:
+        dt = datetime.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S")
+        return dt.strftime("%d/%m/%Y às %H:%M:%S")
+    except ValueError:
+        return iso
+
+
 def _fmt_val(v: float | None, is_pct: bool = False) -> str:
     if v is None or v == 0.0:
         return "-"
@@ -391,7 +402,7 @@ def build_pdf(
         sub_style,
     ))
     if response.data_status:
-        story.append(Paragraph(f"Data de entrega: {response.data_status}", sub_style))
+        story.append(Paragraph(f"Data de entrega: {_fmt_data_status(response.data_status)}", sub_style))
     story.append(Spacer(1, 0.3 * cm))
 
     col_widths_a = [7.0 * cm] + [3.0 * cm] * 6
