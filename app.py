@@ -61,6 +61,11 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown(
+    "<style>div.block-container{padding-top:1.5rem;}</style>",
+    unsafe_allow_html=True,
+)
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -94,7 +99,6 @@ with st.sidebar:
 
 st.title("Dados de Execução Orçamentária")
 st.caption(
-    "Tribunal de Contas do Estado de Alagoas · "
     "Dados com base no Balanço Orçamentário — Anexo I do Relatório Resumido "
     "de Execução Orçamentária (RREO) do 6º Bimestre"
 )
@@ -175,8 +179,8 @@ if _SK_XLSX in st.session_state:
     col_res.metric(
         "Resultado Orçamentário",
         _fmt_brl(abs(res)),
-        delta="SUPERÁVIT" if res >= 0 else "DÉFICIT",
-        delta_color="normal" if res >= 0 else "inverse",
+        delta="SUPERÁVIT" if res >= 0 else "-DÉFICIT",
+        delta_color="normal",
     )
 
     st.divider()
