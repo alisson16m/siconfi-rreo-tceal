@@ -12,6 +12,7 @@ from src.siconfi_client import (
     SiconfiInvalidJsonError,
     SiconfiNetworkError,
     SiconfiResponse,
+    fetch_data_status,
     fetch_rreo_anexo1,
 )
 
@@ -154,3 +155,84 @@ class TestFetchRreoAnexo1:
 
         assert "count" in result.metadados
         assert result.metadados["count"] == arapiraca_payload["count"]
+
+
+_EXTRATO_PAYLOAD = {
+    "items": [
+        {
+            "exercicio": 2025, "cod_ibge": 2700300, "populacao": 235085,
+            "instituicao": "Prefeitura Municipal de Arapiraca - AL",
+            "entregavel": "Relatório de Gestão Fiscal",
+            "periodo": 6, "periodicidade": "B",
+            "status_relatorio": None,
+            "data_status": "2026-01-15T10:00:00Z",
+            "forma_envio": "CSV", "tipo_relatorio": "P",
+        },
+        {
+            "exercicio": 2025, "cod_ibge": 2700300, "populacao": 235085,
+            "instituicao": "Prefeitura Municipal de Arapiraca - AL",
+            "entregavel": "Relatório Resumido de Execução Orçamentária",
+            "periodo": 5, "periodicidade": "B",
+            "status_relatorio": None,
+            "data_status": "2025-11-28T12:00:00Z",
+            "forma_envio": "CSV", "tipo_relatorio": "P",
+        },
+        {
+            "exercicio": 2025, "cod_ibge": 2700300, "populacao": 235085,
+            "instituicao": "Prefeitura Municipal de Arapiraca - AL",
+            "entregavel": "Relatório Resumido de Execução Orçamentária",
+            "periodo": 6, "periodicidade": "B",
+            "status_relatorio": None,
+            "data_status": "2026-01-30T11:34:12Z",
+            "forma_envio": "CSV", "tipo_relatorio": "P",
+        },
+    ],
+    "hasMore": False, "count": 3, "limit": 5000, "offset": 0,
+}
+
+
+class TestFetchDataStatus:
+    def test_retorna_data_status_do_rreo_sexto_bimestre(self):
+        with patch("src.siconfi_client.requests.get") as mock_get:
+            mock_get.return_value = _make_mock_response(_EXTRATO_PAYLOAD)
+            result = fetch_data_status("2700300", 2025)
+
+        assert result == "2026-01-30T11:34:12Z"
+
+    def test_ignora_outros_entregaveis_e_periodos(self):
+        payload = {
+            "items": [
+                {**_EXTRATO_PAYLOAD["items"][0]},  # RGF período 6 — deve ignorar
+                {**_EXTRATO_PAYLOAD["items"][1]},  # RREO período 5 — deve ignorar
+            ],
+            "hasMore": False, "count": 2, "limit": 5000, "offset": 0,
+        }
+        with patch("src.siconfi_client.requests.get") as mock_get:
+            mock_get.return_value = _make_mock_response(payload)
+            result = fetch_data_status("2700300", 2025)
+
+        assert result is None
+
+    def test_retorna_none_quando_lista_vazia(self):
+        payload = {"items": [], "hasMore": False, "count": 0, "limit": 5000, "offset": 0}
+        with patch("src.siconfi_client.requests.get") as mock_get:
+            mock_get.return_value = _make_mock_response(payload)
+            result = fetch_data_status("2700300", 2025)
+
+        assert result is None
+
+    def test_retorna_none_em_falha_de_rede_sem_excecao(self):
+        with patch("src.siconfi_client.requests.get") as mock_get:
+            mock_get.side_effect = requests.ConnectionError("sem rede")
+            result = fetch_data_status("2700300", 2025)
+
+        assert result is None
+
+    def test_retorna_none_em_http_error_sem_excecao(self):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("500")
+        with patch("src.siconfi_client.requests.get") as mock_get:
+            mock_get.return_value = mock_resp
+            result = fetch_data_status("2700300", 2025)
+
+        assert result is None

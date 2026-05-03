@@ -33,7 +33,10 @@ Divergências em relação ao briefing original:
   - 'DESPESAS EMPENHADAS - Até o Bimestre' → API retorna 'DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)'
   - 'DESPESAS LIQUIDADAS - Até o Bimestre' → API retorna 'DESPESAS LIQUIDADAS ATÉ O BIMESTRE (h)'
   - 'DESPESAS PAGAS - Até o Bimestre' → API retorna 'DESPESAS PAGAS ATÉ O BIMESTRE (j)'
-  - Campo 'data_publicacao' não existe na resposta da API.
+  - Campo 'data_publicacao' não existe no endpoint /rreo. A data de entrega
+    é obtida via endpoint separado /extrato_entregas (campo 'data_status'),
+    filtrando por entregavel='Relatório Resumido de Execução Orçamentária'
+    e periodo=6.
 """
 
 import logging
@@ -45,10 +48,12 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/rreo"
+_BASE_URL_RREO = "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/rreo"
+_BASE_URL_EXTRATO = "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/extrato_entregas"
 _TIMEOUT = 60
 _MAX_RETRIES = 3
 _RETRY_BASE_WAIT = 2.0
+_ENTREGAVEL_RREO = "Relatório Resumido de Execução Orçamentária"
 
 
 class SiconfiError(Exception):
@@ -75,6 +80,7 @@ class SiconfiResponse:
     periodo: int
     url_chamada: str
     metadados: dict[str, Any] = field(default_factory=dict)
+    data_status: str | None = None  # data de entrega/homologação do RREO no SICONFI
 
 
 def fetch_rreo_anexo1(id_ente: str, exercicio: int, esfera: str) -> SiconfiResponse:
@@ -108,7 +114,7 @@ def fetch_rreo_anexo1(id_ente: str, exercicio: int, esfera: str) -> SiconfiRespo
 
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
-            resp = requests.get(_BASE_URL, params=params, timeout=_TIMEOUT)
+            resp = requests.get(_BASE_URL_RREO, params=params, timeout=_TIMEOUT)
             resp.raise_for_status()
 
             try:
@@ -170,3 +176,38 @@ def fetch_rreo_anexo1(id_ente: str, exercicio: int, esfera: str) -> SiconfiRespo
         f"Falha na conexão com a API do SICONFI após {_MAX_RETRIES} tentativas. "
         f"Último erro: {last_exception}"
     ) from last_exception
+
+
+def fetch_data_status(id_ente: str, exercicio: int) -> str | None:
+    """
+    Busca a data de entrega/homologação do RREO 6º bimestre no SICONFI.
+
+    Usa o endpoint /extrato_entregas e filtra pelo entregável
+    'Relatório Resumido de Execução Orçamentária', período 6.
+
+    Args:
+        id_ente: Código IBGE do ente.
+        exercicio: Ano do exercício.
+
+    Returns:
+        String ISO-8601 da data de entrega (ex: '2026-01-30T11:34:12Z'),
+        ou None se não encontrado ou em caso de falha de rede (não bloqueia
+        o fluxo principal — o rodapé simplesmente omite a data).
+    """
+    params = {"id_ente": str(id_ente), "an_referencia": exercicio}
+    try:
+        resp = requests.get(_BASE_URL_EXTRATO, params=params, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+    except Exception as exc:
+        logger.warning("fetch_data_status falhou para ente %s / %d: %s", id_ente, exercicio, exc)
+        return None
+
+    for item in items:
+        if (
+            item.get("entregavel") == _ENTREGAVEL_RREO
+            and item.get("periodo") == 6
+        ):
+            return item.get("data_status")
+
+    return None
