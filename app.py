@@ -17,6 +17,8 @@ from src.siconfi_client import (
     fetch_rreo_anexo1,
 )
 
+_VERSION = pathlib.Path(__file__).parent.joinpath("VERSION").read_text(encoding="utf-8").strip()
+
 # ── Constantes internas da API usadas para calcular as métricas de resumo ─────
 _CONTAS_RECEITA = ("ReceitasCorrentes", "ReceitasCorrentesIntra", "ReceitasDeCapital")
 _CONTAS_DESPESA = ("DespesasCorrentes", "DespesasDeCapital")
@@ -52,7 +54,11 @@ st.set_page_config(
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title("⚙️ Parâmetros")
+    st.markdown("### Gerador de Relatórios do SICONFI")
+    st.caption("Diretoria de Coordenação de Técnicos (DCT)")
+    st.caption(f"Versão {_VERSION}")
+    st.divider()
+    st.markdown("**⚙️ Parâmetros**")
 
     estado = next(e for e in ENTES_AL if e.esfera == "E")
     municipios = sorted((e for e in ENTES_AL if e.esfera == "M"), key=lambda e: e.nome)
@@ -61,7 +67,7 @@ with st.sidebar:
     ente: Ente = st.selectbox(
         "Ente fiscal",
         options=entes_ordenados,
-        format_func=lambda e: f"{e.nome} ({'Estado' if e.esfera == 'E' else 'Município'})",
+        format_func=lambda e: e.nome,
         index=0,
     )
 
