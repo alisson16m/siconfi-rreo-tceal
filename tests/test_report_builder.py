@@ -104,11 +104,14 @@ class TestFmtVal:
     def test_formata_decimal_com_centavos(self):
         assert _fmt_val(1234.56) == "1.234,56"
 
-    def test_zero_vira_traco(self):
-        assert _fmt_val(0.0) == "-"
+    def test_zero_vira_zero_formatado(self):
+        assert _fmt_val(0.0) == "0,00"
 
-    def test_none_vira_traco(self):
-        assert _fmt_val(None) == "-"
+    def test_none_vira_zero_formatado(self):
+        assert _fmt_val(None) == "0,00"
+
+    def test_zero_percentual(self):
+        assert _fmt_val(0.0, is_pct=True) == "0,00%"
 
     def test_formato_percentual(self):
         assert _fmt_val(0.1234, is_pct=True) == "12.34%"
@@ -122,33 +125,39 @@ class TestFmtVal:
 class TestBuildTableA:
     def test_primeira_linha_e_cabecalho_com_sete_colunas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_a(pivot)
+        table, _ = _build_table_a(pivot)
         assert table[0][0] == "Receitas"
         assert len(table[0]) == 7
 
     def test_tem_linha_receitas_correntes(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_a(pivot)
+        table, _ = _build_table_a(pivot)
         labels = [row[0] for row in table[1:]]
         assert "Receitas Correntes (I)" in labels
 
     def test_tem_linha_total_receitas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_a(pivot)
+        table, _ = _build_table_a(pivot)
         labels = [row[0] for row in table[1:]]
         assert "TOTAL DAS RECEITAS (VIII) = (III+VI)" in labels
 
     def test_valores_receitas_correntes(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_a(pivot)
+        table, _ = _build_table_a(pivot)
         rc_row = next(r for r in table[1:] if r[0] == "Receitas Correntes (I)")
         assert rc_row[1] == _fmt_val(1030471541)      # PI
         assert rc_row[2] == _fmt_val(1218263018.8)    # PA
         assert rc_row[3] == _fmt_val(1267662215.61)   # AR
 
+    def test_nao_tem_linha_receitas_orcamentarias(self, arapiraca_response):
+        pivot = _pivot_items(arapiraca_response.items)
+        table, _ = _build_table_a(pivot)
+        labels = [row[0] for row in table[1:]]
+        assert "Receitas Orçamentárias" not in labels
+
     def test_cada_linha_tem_sete_colunas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_a(pivot)
+        table, _ = _build_table_a(pivot)
         for i, row in enumerate(table):
             assert len(row) == 7, f"Linha {i} tem {len(row)} colunas, esperado 7"
 
@@ -158,25 +167,25 @@ class TestBuildTableA:
 class TestBuildTableB:
     def test_primeira_linha_e_cabecalho_com_sete_colunas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_b(pivot)
+        table, _ = _build_table_b(pivot)
         assert table[0][0] == "Despesas"
         assert len(table[0]) == 7
 
     def test_tem_linha_despesas_correntes(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_b(pivot)
+        table, _ = _build_table_b(pivot)
         labels = [row[0] for row in table[1:]]
         assert "Despesas Correntes (I)" in labels
 
     def test_tem_linha_total_despesas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_b(pivot)
+        table, _ = _build_table_b(pivot)
         labels = [row[0] for row in table[1:]]
         assert "TOTAL DAS DESPESAS (VIII) = (III+VII)" in labels
 
     def test_valores_despesas_correntes(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table = _build_table_b(pivot)
+        table, _ = _build_table_b(pivot)
         dc_row = next(r for r in table[1:] if r[0] == "Despesas Correntes (I)")
         assert dc_row[1] == _fmt_val(954927141)        # DI
         assert dc_row[2] == _fmt_val(1147906628.29)    # DA

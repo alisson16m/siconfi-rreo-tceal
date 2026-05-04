@@ -109,6 +109,9 @@ _HEADER_B = ["Despesas", "Dotação Inicial", "Dotação Atualizada",
 _CURRENCY_FMT = '#,##0.00'
 _PCT_FMT      = '0.00%'
 
+_BOLD_ROWS_A = {8, 21, 22, 23, 36, 37, 38}
+_BOLD_ROWS_B = {44, 48, 49, 50, 55, 56, 57}
+
 
 # ── Pivot ─────────────────────────────────────────────────────────────────────
 
@@ -313,20 +316,21 @@ def _fmt_data_status(iso: str | None) -> str:
 
 def _fmt_val(v: float | None, is_pct: bool = False) -> str:
     if v is None or v == 0.0:
-        return "-"
+        return "0,00%" if is_pct else "0,00"
     if is_pct:
         return f"{v * 100:.2f}%"
     return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _build_table_a(pivot: dict) -> list[list]:
+def _build_table_a(pivot: dict) -> tuple[list[list], list[int]]:
     total_ar = (
         _g(pivot, "ReceitasCorrentes", _AR)
         + _g(pivot, "ReceitasCorrentesIntra", _AR)
         + _g(pivot, "ReceitasDeCapital", _AR)
     )
-    rows = [["Receitas", "Prev. Inicial (a)", "Prev. Atualizada (b)",
-             "Arrec. (c)", "Dif. (c-b)", "A.V.%", "A.H.%"]]
+    rows: list[list] = [["Receitas", "Prev. Inicial (a)", "Prev. Atualizada (b)",
+                          "Arrec. (c)", "Dif. (c-b)", "A.V.%", "A.H.%"]]
+    bold_rows: list[int] = []
 
     sums: dict[int, tuple[float, ...]] = {}
     for row_num, label, conta in _BLOCO_A:
@@ -344,17 +348,26 @@ def _build_table_a(pivot: dict) -> list[list]:
             ar = _g(pivot, conta, _AR)
 
         sums[row_num] = (pi, pa, ar)
+
+        if row_num == 7:  # "Receitas Orçamentárias" removida do PDF
+            continue
+
         diff = ar - pa
         av   = ar / total_ar if total_ar else 0.0
         ah   = ar / pa       if pa       else 0.0
+
+        if row_num in _BOLD_ROWS_A:
+            bold_rows.append(len(rows))
+
         rows.append([label, _fmt_val(pi), _fmt_val(pa), _fmt_val(ar),
                      _fmt_val(diff), _fmt_val(av, True), _fmt_val(ah, True)])
-    return rows
+    return rows, bold_rows
 
 
-def _build_table_b(pivot: dict) -> list[list]:
-    rows = [["Despesas", "Dot. Inicial", "Dot. Atualizada",
-             "Empenhado", "Liquidado", "Pago", "RPNP"]]
+def _build_table_b(pivot: dict) -> tuple[list[list], list[int]]:
+    rows: list[list] = [["Despesas", "Dot. Inicial", "Dot. Atualizada",
+                          "Empenhado", "Liquidado", "Pago", "RPNP"]]
+    bold_rows: list[int] = []
     sums: dict[int, tuple[float, ...]] = {}
     for row_num, label, conta in _BLOCO_B:
         if conta == "__HEADER" or label == "":
@@ -368,8 +381,33 @@ def _build_table_b(pivot: dict) -> list[list]:
         else:
             vals = _despesa_vals(pivot, conta)
         sums[row_num] = vals
+
+        if row_num in _BOLD_ROWS_B:
+            bold_rows.append(len(rows))
+
         rows.append([label] + [_fmt_val(v) for v in vals])
-    return rows
+    return rows, bold_rows
+
+
+def _make_table_style(bold_rows: list[int]) -> TableStyle:
+    cmds: list = [
+        ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#2E5E8E")),
+        ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+        ("FONTNAME",      (0, 0), (-1, 0),  "Times-Bold"),
+        ("FONTNAME",      (0, 1), (-1, -1), "Times-Roman"),
+        ("FONTSIZE",      (0, 0), (-1, -1), 10),
+        ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
+        ("ALIGN",         (0, 0), (0, -1),  "LEFT"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#EEF2F7")]),
+        ("GRID",          (0, 0), (-1, -1), 0.25, colors.HexColor("#BBBBBB")),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
+    ]
+    for r in bold_rows:
+        cmds.append(("FONTNAME", (0, r), (-1, r), "Times-Bold"))
+    return TableStyle(cmds)
 
 
 def build_pdf(
@@ -392,8 +430,9 @@ def build_pdf(
     pivot = _pivot_items(response.items)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("title", parent=styles["Heading2"],
-                                 fontSize=10, spaceAfter=4)
-    sub_style   = ParagraphStyle("sub", parent=styles["Normal"], fontSize=8)
+                                 fontName="Times-Bold", fontSize=10, spaceAfter=4)
+    sub_style   = ParagraphStyle("sub", parent=styles["Normal"],
+                                 fontName="Times-Roman", fontSize=10)
 
     story = []
     story.append(Paragraph("APÊNDICE I", title_style))
@@ -405,35 +444,20 @@ def build_pdf(
         story.append(Paragraph(f"Data de entrega: {_fmt_data_status(response.data_status)}", sub_style))
     story.append(Spacer(1, 0.3 * cm))
 
-    col_widths_a = [7.0 * cm] + [3.0 * cm] * 6
-    col_widths_b = [7.0 * cm] + [3.0 * cm] * 6
-
-    _table_style = TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, 0), colors.HexColor("#2E5E8E")),
-        ("TEXTCOLOR",    (0, 0), (-1, 0), colors.white),
-        ("FONTNAME",     (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE",     (0, 0), (-1, -1), 6.5),
-        ("ALIGN",        (1, 0), (-1, -1), "RIGHT"),
-        ("ALIGN",        (0, 0), (0, -1), "LEFT"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#EEF2F7")]),
-        ("GRID",         (0, 0), (-1, -1), 0.25, colors.HexColor("#BBBBBB")),
-        ("TOPPADDING",   (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-    ])
+    col_widths_a = [8.0 * cm] + [3.2 * cm] * 6
+    col_widths_b = [8.0 * cm] + [3.2 * cm] * 6
 
     story.append(Paragraph("Bloco A – Demonstrativo Analítico da Execução da Receita", title_style))
-    data_a = _build_table_a(pivot)
+    data_a, bold_a = _build_table_a(pivot)
     tbl_a = Table(data_a, colWidths=col_widths_a, repeatRows=1)
-    tbl_a.setStyle(_table_style)
+    tbl_a.setStyle(_make_table_style(bold_a))
     story.append(tbl_a)
     story.append(Spacer(1, 0.4 * cm))
 
     story.append(Paragraph("Bloco B – Demonstrativo Analítico da Execução da Despesa", title_style))
-    data_b = _build_table_b(pivot)
+    data_b, bold_b = _build_table_b(pivot)
     tbl_b = Table(data_b, colWidths=col_widths_b, repeatRows=1)
-    tbl_b.setStyle(_table_style)
+    tbl_b.setStyle(_make_table_style(bold_b))
     story.append(tbl_b)
     story.append(Spacer(1, 0.4 * cm))
 
@@ -454,16 +478,16 @@ def build_pdf(
     ]
     story.append(Paragraph("Bloco C – Resultado Orçamentário", title_style))
     tbl_c = Table(data_c, colWidths=[10 * cm, 5 * cm])
-    tbl_c.setStyle(_table_style)
+    tbl_c.setStyle(_make_table_style([]))
     story.append(tbl_c)
 
     doc = SimpleDocTemplate(
         str(out),
         pagesize=landscape(A4),
-        leftMargin=1.5 * cm,
-        rightMargin=1.5 * cm,
-        topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm,
+        leftMargin=1.0 * cm,
+        rightMargin=1.0 * cm,
+        topMargin=1.0 * cm,
+        bottomMargin=1.0 * cm,
     )
     doc.build(story)
     return out
