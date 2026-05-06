@@ -71,7 +71,7 @@ def _cached_fetch(id_ente: str, exercicio: int, esfera: str) -> SiconfiResponse:
 # ── Configuração da página ────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="Apêndice I — RREO · TCE-AL",
+    page_title="Gerador de Relatórios do SICONFI",
     page_icon="🏛️",
     layout="wide",
 )
@@ -196,9 +196,9 @@ if _SK_XLSX in st.session_state:
     st.success(f"✅ Relatório gerado: **{nome}** — exercício **{ano}**")
 
     if data:
-        st.info(f"📅 Data de entrega no SICONFI: `{_fmt_data_status(data)}`")
+        st.info(f"📅 Data de envio dos dados ao SICONFI: `{_fmt_data_status(data)}`")
     else:
-        st.warning("⚠️ Data de entrega não encontrada no SICONFI.")
+        st.warning("⚠️ Data de envio dos dados não encontrada no SICONFI.")
 
     col_r, col_d, col_res = st.columns(3)
     col_r.metric("Receitas Realizadas", _fmt_brl(rec))
@@ -206,7 +206,7 @@ if _SK_XLSX in st.session_state:
     col_res.metric(
         "Resultado Orçamentário",
         _fmt_brl(abs(res)),
-        delta="SUPERÁVIT" if res >= 0 else "-DÉFICIT",
+        delta="SUPERÁVIT" if res >= 0 else "DÉFICIT",
         delta_color="normal",
     )
 
