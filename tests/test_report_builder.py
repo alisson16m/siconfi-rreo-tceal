@@ -125,25 +125,25 @@ class TestFmtVal:
 class TestBuildTableA:
     def test_primeira_linha_e_cabecalho_com_sete_colunas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table, _ = _build_table_a(pivot)
+        table, *_ = _build_table_a(pivot)
         assert table[0][0] == "Receitas"
         assert len(table[0]) == 7
 
     def test_tem_linha_receitas_correntes(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table, _ = _build_table_a(pivot)
+        table, *_ = _build_table_a(pivot)
         labels = [row[0] for row in table[1:]]
         assert "Receitas Correntes (I)" in labels
 
     def test_tem_linha_total_receitas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table, _ = _build_table_a(pivot)
+        table, *_ = _build_table_a(pivot)
         labels = [row[0] for row in table[1:]]
         assert "TOTAL DAS RECEITAS (VIII) = (III+VI)" in labels
 
     def test_valores_receitas_correntes(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table, _ = _build_table_a(pivot)
+        table, *_ = _build_table_a(pivot)
         rc_row = next(r for r in table[1:] if r[0] == "Receitas Correntes (I)")
         assert rc_row[1] == _fmt_val(1030471541)      # PI
         assert rc_row[2] == _fmt_val(1218263018.8)    # PA
@@ -151,13 +151,13 @@ class TestBuildTableA:
 
     def test_nao_tem_linha_receitas_orcamentarias(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table, _ = _build_table_a(pivot)
+        table, *_ = _build_table_a(pivot)
         labels = [row[0] for row in table[1:]]
         assert "Receitas Orçamentárias" not in labels
 
     def test_cada_linha_tem_sete_colunas(self, arapiraca_response):
         pivot = _pivot_items(arapiraca_response.items)
-        table, _ = _build_table_a(pivot)
+        table, *_ = _build_table_a(pivot)
         for i, row in enumerate(table):
             assert len(row) == 7, f"Linha {i} tem {len(row)} colunas, esperado 7"
 

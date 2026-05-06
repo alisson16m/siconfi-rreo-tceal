@@ -329,8 +329,9 @@ def _build_table_a(pivot: dict) -> tuple[list[list], list[int]]:
         + _g(pivot, "ReceitasDeCapital", _AR)
     )
     rows: list[list] = [["Receitas", "Prev. Inicial (a)", "Prev. Atualizada (b)",
-                          "Arrec. (c)", "Dif. (c-b)", "A.V.%", "A.H.%"]]
+                          "Arrec. (c)", "Diferença (c-b)", "A.V.%", "A.H.%"]]
     bold_rows: list[int] = []
+    neg_diff_rows: list[int] = []
 
     sums: dict[int, tuple[float, ...]] = {}
     for row_num, label, conta in _BLOCO_A:
@@ -358,10 +359,12 @@ def _build_table_a(pivot: dict) -> tuple[list[list], list[int]]:
 
         if row_num in _BOLD_ROWS_A:
             bold_rows.append(len(rows))
+        if diff < 0:
+            neg_diff_rows.append(len(rows))
 
         rows.append([label, _fmt_val(pi), _fmt_val(pa), _fmt_val(ar),
                      _fmt_val(diff), _fmt_val(av, True), _fmt_val(ah, True)])
-    return rows, bold_rows
+    return rows, bold_rows, neg_diff_rows
 
 
 def _build_table_b(pivot: dict) -> tuple[list[list], list[int]]:
@@ -389,7 +392,7 @@ def _build_table_b(pivot: dict) -> tuple[list[list], list[int]]:
     return rows, bold_rows
 
 
-def _make_table_style(bold_rows: list[int]) -> TableStyle:
+def _make_table_style(bold_rows: list[int], neg_diff_rows: list[int] | None = None) -> TableStyle:
     cmds: list = [
         ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#2E5E8E")),
         ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
@@ -407,6 +410,8 @@ def _make_table_style(bold_rows: list[int]) -> TableStyle:
     ]
     for r in bold_rows:
         cmds.append(("FONTNAME", (0, r), (-1, r), "Times-Bold"))
+    for r in (neg_diff_rows or []):
+        cmds.append(("TEXTCOLOR", (4, r), (4, r), colors.red))
     return TableStyle(cmds)
 
 
@@ -441,16 +446,16 @@ def build_pdf(
         sub_style,
     ))
     if response.data_status:
-        story.append(Paragraph(f"Data de entrega: {_fmt_data_status(response.data_status)}", sub_style))
+        story.append(Paragraph(f"Data de envio dos dados ao SICONFI: {_fmt_data_status(response.data_status)}", sub_style))
     story.append(Spacer(1, 0.3 * cm))
 
     col_widths_a = [8.0 * cm] + [3.2 * cm] * 6
     col_widths_b = [8.0 * cm] + [3.2 * cm] * 6
 
     story.append(Paragraph("Bloco A – Demonstrativo Analítico da Execução da Receita", title_style))
-    data_a, bold_a = _build_table_a(pivot)
+    data_a, bold_a, neg_a = _build_table_a(pivot)
     tbl_a = Table(data_a, colWidths=col_widths_a, repeatRows=1)
-    tbl_a.setStyle(_make_table_style(bold_a))
+    tbl_a.setStyle(_make_table_style(bold_a, neg_a))
     story.append(tbl_a)
     story.append(Spacer(1, 0.4 * cm))
 
