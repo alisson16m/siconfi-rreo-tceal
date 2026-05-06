@@ -1,5 +1,6 @@
 """Gerador de Apêndice I — RREO Anexo 1 · TCE-AL"""
 
+import logging
 import pathlib
 import tempfile
 import unicodedata
@@ -13,11 +14,19 @@ from src.siconfi_client import (
     SiconfiEmptyResponseError,
     SiconfiInvalidJsonError,
     SiconfiNetworkError,
+    SiconfiResponse,
     fetch_data_status,
     fetch_rreo_anexo1,
 )
 
 _VERSION = pathlib.Path(__file__).parent.joinpath("VERSION").read_text(encoding="utf-8").strip()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # ── Constantes internas da API usadas para calcular as métricas de resumo ─────
 _CONTAS_RECEITA = ("ReceitasCorrentes", "ReceitasCorrentesIntra", "ReceitasDeCapital")
@@ -51,6 +60,12 @@ def _fmt_data_status(iso: str | None) -> str:
         return dt.strftime("%d/%m/%Y às %H:%M:%S")
     except ValueError:
         return iso
+
+
+# TTL de 300s: evita chamadas redundantes na mesma sessão sem risco de dados desatualizados
+@st.cache_data(ttl=300)
+def _cached_fetch(id_ente: str, exercicio: int, esfera: str) -> SiconfiResponse:
+    return fetch_rreo_anexo1(id_ente=id_ente, exercicio=exercicio, esfera=esfera)
 
 
 # ── Configuração da página ────────────────────────────────────────────────────
@@ -121,23 +136,30 @@ if (
 if gerar:
     with st.spinner(f"Consultando SICONFI — {ente.nome} / {exercicio}..."):
         try:
-            response = fetch_rreo_anexo1(
+            logger.info("Consulta iniciada: ente=%s, exercicio=%d", ente.id_ente, exercicio)
+            response = _cached_fetch(
                 id_ente=ente.id_ente,
                 exercicio=exercicio,
                 esfera=ente.esfera,
             )
+            logger.info("Consulta concluída: %d itens retornados", len(response.items))
         except SiconfiEmptyResponseError:
             st.warning(
-                f"⚠️ Dados não disponíveis para **{ente.nome}** "
-                f"no exercício **{exercicio}** (6º bimestre).\n\n"
-                "O ente pode não ter entregado o RREO ou o exercício ainda não foi encerrado."
+                "Nenhum dado encontrado para o ente e exercício selecionados. "
+                "Verifique se o demonstrativo foi publicado no SICONFI."
             )
             st.stop()
-        except SiconfiNetworkError as exc:
-            st.error(f"❌ Falha na comunicação com a API do SICONFI:\n\n`{exc}`")
+        except SiconfiNetworkError as e:
+            st.error("Falha na comunicação com a API do SICONFI. Verifique sua conexão e tente novamente.")
+            logger.error("SiconfiNetworkError: %s", e)
             st.stop()
-        except SiconfiInvalidJsonError as exc:
-            st.error(f"❌ Resposta inesperada da API do SICONFI:\n\n`{exc}`")
+        except SiconfiInvalidJsonError as e:
+            st.error("A API do SICONFI retornou uma resposta inesperada. Tente novamente em instantes.")
+            logger.error("SiconfiInvalidJsonError: %s", e)
+            st.stop()
+        except Exception as e:
+            st.error("Ocorreu um erro inesperado. Tente novamente ou entre em contato com o suporte técnico.")
+            logger.exception("Erro não tratado: %s", e)
             st.stop()
 
         response.data_status = fetch_data_status(ente.id_ente, exercicio)
@@ -149,7 +171,9 @@ if gerar:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
             xlsx_path = build_xlsx(response, tmp_path / "report.xlsx")
+            logger.info("Relatório XLSX gerado: %s", xlsx_path.name)
             pdf_path  = build_pdf(response, tmp_path / "report.pdf")
+            logger.info("Relatório PDF gerado: %s", pdf_path.name)
             st.session_state[_SK_XLSX] = xlsx_path.read_bytes()
             st.session_state[_SK_PDF]  = pdf_path.read_bytes()
 

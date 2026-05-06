@@ -32,18 +32,21 @@ _TEMPLATE_PATH = (
 )
 
 # ── Colunas da API ────────────────────────────────────────────────────────────
-_PI = "PREVISÃO INICIAL"
-_PA = "PREVISÃO ATUALIZADA (a)"
-_AR = "Até o Bimestre (c)"
-_DI = "DOTAÇÃO INICIAL (d)"
-_DA = "DOTAÇÃO ATUALIZADA (e)"
-_EM = "DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)"
-_LI = "DESPESAS LIQUIDADAS ATÉ O BIMESTRE (h)"
-_PG = "DESPESAS PAGAS ATÉ O BIMESTRE (j)"
-_RK = "INSCRITAS EM RESTOS A PAGAR NÃO PROCESSADOS (k)"
+# Bloco A — Receitas: aliases dos nomes de coluna retornados pela API SICONFI
+_PI = "PREVISÃO INICIAL"                 # orçamento inicial aprovado na LOA
+_PA = "PREVISÃO ATUALIZADA (a)"          # previsão após créditos adicionais
+_AR = "Até o Bimestre (c)"              # receita arrecadada acumulada até o 6º bimestre
+# Bloco B — Despesas: aliases dos nomes de coluna retornados pela API SICONFI
+_DI = "DOTAÇÃO INICIAL (d)"             # dotação aprovada na LOA
+_DA = "DOTAÇÃO ATUALIZADA (e)"          # dotação após suplementações/reduções
+_EM = "DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)"      # empenhado acumulado
+_LI = "DESPESAS LIQUIDADAS ATÉ O BIMESTRE (h)"      # liquidado acumulado
+_PG = "DESPESAS PAGAS ATÉ O BIMESTRE (j)"           # pago acumulado
+_RK = "INSCRITAS EM RESTOS A PAGAR NÃO PROCESSADOS (k)"  # RPNP
 
 # ── Mapeamento: linha do template → (rótulo, cod_conta)  ─────────────────────
 # Bloco A: colunas C=PI, D=PA, E=AR, F=diff(E-D), G=AV%, H=AH%
+# cod_conta especial: "__HEADER" → linha de cabeçalho; "__SUM_R*" → linha calculada (soma de outras)
 _BLOCO_A: list[tuple[int, str, str | None]] = [
     (6,  "Receitas",                                                       "__HEADER"),
     (7,  "Receitas Orçamentárias",                                         "ReceitasExcetoIntraOrcamentarias"),
@@ -109,7 +112,11 @@ _HEADER_B = ["Despesas", "Dotação Inicial", "Dotação Atualizada",
 _CURRENCY_FMT = '#,##0.00'
 _PCT_FMT      = '0.00%'
 
+# Linhas em negrito no PDF (Bloco A): Receitas Correntes(8), Intra-Correntes(21),
+# Subtotal Correntes(22), Receitas de Capital(23), Intra-Capital(36), Subtotal Capital(37), Total(38)
 _BOLD_ROWS_A = {8, 21, 22, 23, 36, 37, 38}
+# Linhas em negrito no PDF (Bloco B): Despesas Correntes(44), Intra-Correntes(48),
+# Subtotal Corrente(49), Despesas de Capital(50), Intra-Capital(55), Subtotal Capital(56), Total(57)
 _BOLD_ROWS_B = {44, 48, 49, 50, 55, 56, 57}
 
 
