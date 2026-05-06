@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".venv\\Scripts\\python.exe -m pytest tests/ --tb=short -q 2>&1 | tail -20"
+          }
+        ]
+      }
+    ]
+  }
+}
