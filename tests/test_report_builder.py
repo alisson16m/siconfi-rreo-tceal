@@ -195,62 +195,62 @@ class TestBuildTableB:
 # ── build_xlsx ────────────────────────────────────────────────────────────────
 
 class TestBuildXlsx:
-    def test_retorna_path_e_arquivo_existe(self, arapiraca_response, tmp_path):
-        out = build_xlsx(arapiraca_response, tmp_path / "test.xlsx")
-        assert isinstance(out, pathlib.Path)
-        assert out.exists()
+    def test_retorna_bytes_nao_vazios(self, arapiraca_response):
+        data = build_xlsx(arapiraca_response)
+        assert isinstance(data, bytes)
+        assert len(data) > 0
 
-    def test_arquivo_e_xlsx_valido(self, arapiraca_response, tmp_path):
-        out = build_xlsx(arapiraca_response, tmp_path / "test.xlsx")
-        wb = openpyxl.load_workbook(out)
+    def test_arquivo_e_xlsx_valido(self, arapiraca_response):
+        import io as _io
+        data = build_xlsx(arapiraca_response)
+        wb = openpyxl.load_workbook(_io.BytesIO(data))
         assert wb.active is not None
 
-    def test_label_receitas_correntes_na_celula_correta(self, arapiraca_response, tmp_path):
-        out = build_xlsx(arapiraca_response, tmp_path / "test.xlsx")
-        ws = openpyxl.load_workbook(out).active
+    def test_label_receitas_correntes_na_celula_correta(self, arapiraca_response):
+        import io as _io
+        ws = openpyxl.load_workbook(_io.BytesIO(build_xlsx(arapiraca_response))).active
         # _fill_bloco_a: row=8 → "Receitas Correntes (I)", col=2
         assert ws.cell(row=8, column=2).value == "Receitas Correntes (I)"
 
-    def test_receitas_correntes_pi_na_celula_correta(self, arapiraca_response, tmp_path):
-        out = build_xlsx(arapiraca_response, tmp_path / "test.xlsx")
-        ws = openpyxl.load_workbook(out).active
+    def test_receitas_correntes_pi_na_celula_correta(self, arapiraca_response):
+        import io as _io
+        ws = openpyxl.load_workbook(_io.BytesIO(build_xlsx(arapiraca_response))).active
         # row=8, col=3 → ReceitasCorrentes[PREVISÃO INICIAL] = 1030471541
         assert ws.cell(row=8, column=3).value == pytest.approx(1030471541, rel=1e-6)
 
-    def test_despesas_correntes_di_na_celula_correta(self, arapiraca_response, tmp_path):
-        out = build_xlsx(arapiraca_response, tmp_path / "test.xlsx")
-        ws = openpyxl.load_workbook(out).active
+    def test_despesas_correntes_di_na_celula_correta(self, arapiraca_response):
+        import io as _io
+        ws = openpyxl.load_workbook(_io.BytesIO(build_xlsx(arapiraca_response))).active
         # row=44, col=3 → DespesasCorrentes[DOTAÇÃO INICIAL (d)] = 954927141
         assert ws.cell(row=44, column=3).value == pytest.approx(954927141, rel=1e-6)
 
-    def test_label_despesas_correntes_na_celula_correta(self, arapiraca_response, tmp_path):
-        out = build_xlsx(arapiraca_response, tmp_path / "test.xlsx")
-        ws = openpyxl.load_workbook(out).active
+    def test_label_despesas_correntes_na_celula_correta(self, arapiraca_response):
+        import io as _io
+        ws = openpyxl.load_workbook(_io.BytesIO(build_xlsx(arapiraca_response))).active
         assert ws.cell(row=44, column=2).value == "Despesas Correntes (I)"
 
-    def test_cria_diretorios_intermediarios(self, arapiraca_response, tmp_path):
-        out = build_xlsx(arapiraca_response, tmp_path / "sub" / "nested" / "report.xlsx")
-        assert out.exists()
+    def test_template_alternativo_aceito(self, arapiraca_response):
+        data = build_xlsx(arapiraca_response, template_path=None)
+        assert isinstance(data, bytes) and len(data) > 0
 
 
 # ── build_pdf ─────────────────────────────────────────────────────────────────
 
 class TestBuildPdf:
-    def test_retorna_path_e_arquivo_existe(self, arapiraca_response, tmp_path):
-        out = build_pdf(arapiraca_response, tmp_path / "test.pdf")
-        assert isinstance(out, pathlib.Path)
-        assert out.exists()
+    def test_retorna_bytes_nao_vazios(self, arapiraca_response):
+        data = build_pdf(arapiraca_response)
+        assert isinstance(data, bytes)
+        assert len(data) > 0
 
-    def test_arquivo_nao_vazio(self, arapiraca_response, tmp_path):
-        out = build_pdf(arapiraca_response, tmp_path / "test.pdf")
-        assert out.stat().st_size > 1024
+    def test_arquivo_nao_vazio(self, arapiraca_response):
+        data = build_pdf(arapiraca_response)
+        assert len(data) > 1024
 
-    def test_arquivo_comeca_com_assinatura_pdf(self, arapiraca_response, tmp_path):
-        out = build_pdf(arapiraca_response, tmp_path / "test.pdf")
-        with open(out, "rb") as f:
-            header = f.read(4)
-        assert header == b"%PDF"
+    def test_arquivo_comeca_com_assinatura_pdf(self, arapiraca_response):
+        data = build_pdf(arapiraca_response)
+        assert data[:4] == b"%PDF"
 
-    def test_cria_diretorios_intermediarios(self, arapiraca_response, tmp_path):
-        out = build_pdf(arapiraca_response, tmp_path / "sub" / "report.pdf")
-        assert out.exists()
+    def test_pdf_gerado_sem_data_status(self, arapiraca_response):
+        arapiraca_response.data_status = None
+        data = build_pdf(arapiraca_response)
+        assert data[:4] == b"%PDF"

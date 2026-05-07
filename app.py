@@ -2,7 +2,7 @@
 
 import logging
 import pathlib
-import tempfile
+import time
 import unicodedata
 from datetime import datetime
 
@@ -33,8 +33,7 @@ _CONTAS_RECEITA = ("ReceitasCorrentes", "ReceitasCorrentesIntra", "ReceitasDeCap
 _CONTAS_DESPESA = ("DespesasCorrentes", "DespesasDeCapital")
 
 # ── Chaves de session_state ────────────────────────────────────────────────────
-_SK_XLSX     = "xlsx_bytes"
-_SK_PDF      = "pdf_bytes"
+_SK_RESP     = "siconfi_response"
 _SK_NOME     = "report_nome"
 _SK_ANO      = "report_ano"
 _SK_RECEITAS = "metric_receitas"
@@ -66,6 +65,12 @@ def _fmt_data_status(iso: str | None) -> str:
 @st.cache_data(ttl=300)
 def _cached_fetch(id_ente: str, exercicio: int, esfera: str) -> SiconfiResponse:
     return fetch_rreo_anexo1(id_ente=id_ente, exercicio=exercicio, esfera=esfera)
+
+
+# TTL de 300s: evita chamadas redundantes na mesma sessão sem risco de dados desatualizados
+@st.cache_data(ttl=300)
+def _cached_fetch_status(id_ente: str, exercicio: int) -> str | None:
+    return fetch_data_status(id_ente=id_ente, exercicio=exercicio)
 
 
 # ── Configuração da página ────────────────────────────────────────────────────
@@ -128,12 +133,13 @@ if (
     st.session_state.get(_SK_NOME) != ente.nome
     or st.session_state.get(_SK_ANO) != exercicio
 ):
-    for k in (_SK_XLSX, _SK_PDF, _SK_RECEITAS, _SK_DESPESAS, _SK_DATA):
+    for k in (_SK_RESP, _SK_RECEITAS, _SK_DESPESAS, _SK_DATA):
         st.session_state.pop(k, None)
 
 # ── Geração do relatório ──────────────────────────────────────────────────────
 
 if gerar:
+    _t0 = time.perf_counter()
     with st.spinner(f"Consultando SICONFI — {ente.nome} / {exercicio}..."):
         try:
             logger.info("Consulta iniciada: ente=%s, exercicio=%d", ente.id_ente, exercicio)
@@ -162,30 +168,31 @@ if gerar:
             logger.exception("Erro não tratado: %s", e)
             st.stop()
 
-        response.data_status = fetch_data_status(ente.id_ente, exercicio)
+        response.data_status = _cached_fetch_status(ente.id_ente, exercicio)
 
         pivot = _pivot_items(response.items)
         total_receitas = sum(_g(pivot, c, _AR) for c in _CONTAS_RECEITA)
         total_despesas = sum(_g(pivot, c, _EM) for c in _CONTAS_DESPESA)
 
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = pathlib.Path(tmp)
-            xlsx_path = build_xlsx(response, tmp_path / "report.xlsx")
-            logger.info("Relatório XLSX gerado: %s", xlsx_path.name)
-            pdf_path  = build_pdf(response, tmp_path / "report.pdf")
-            logger.info("Relatório PDF gerado: %s", pdf_path.name)
-            st.session_state[_SK_XLSX] = xlsx_path.read_bytes()
-            st.session_state[_SK_PDF]  = pdf_path.read_bytes()
-
+        st.session_state[_SK_RESP]     = response
         st.session_state[_SK_NOME]     = ente.nome
         st.session_state[_SK_ANO]      = exercicio
         st.session_state[_SK_RECEITAS] = total_receitas
         st.session_state[_SK_DESPESAS] = total_despesas
         st.session_state[_SK_DATA]     = response.data_status
 
+    _elapsed = time.perf_counter() - _t0
+    logger.info(
+        "Operação concluída: ente=%s, exercicio=%d, tempo_total=%.2fs",
+        ente.id_ente,
+        exercicio,
+        _elapsed,
+    )
+
 # ── Resultados ────────────────────────────────────────────────────────────────
 
-if _SK_XLSX in st.session_state:
+if _SK_RESP in st.session_state:
+    response  = st.session_state[_SK_RESP]
     nome = st.session_state[_SK_NOME]
     ano  = st.session_state[_SK_ANO]
     data = st.session_state[_SK_DATA]
@@ -215,21 +222,29 @@ if _SK_XLSX in st.session_state:
     file_slug = _slug(nome)
     col_xlsx, col_pdf = st.columns(2)
     with col_xlsx:
-        st.download_button(
-            label="📥 Baixar XLSX",
-            data=st.session_state[_SK_XLSX],
-            file_name=f"Apendice_I_{file_slug}_{ano}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+        if st.button("⬇ Gerar XLSX", use_container_width=True, key="btn_xlsx"):
+            with st.spinner("Gerando XLSX..."):
+                _xlsx_data = build_xlsx(response)
+                logger.info("Relatório XLSX gerado: Apendice_I_%s_%d.xlsx", file_slug, ano)
+            st.download_button(
+                label="📥 Baixar XLSX",
+                data=_xlsx_data,
+                file_name=f"Apendice_I_{file_slug}_{ano}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
     with col_pdf:
-        st.download_button(
-            label="📥 Baixar PDF",
-            data=st.session_state[_SK_PDF],
-            file_name=f"Apendice_I_{file_slug}_{ano}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+        if st.button("⬇ Gerar PDF", use_container_width=True, key="btn_pdf"):
+            with st.spinner("Gerando PDF..."):
+                _pdf_data = build_pdf(response)
+                logger.info("Relatório PDF gerado: Apendice_I_%s_%d.pdf", file_slug, ano)
+            st.download_button(
+                label="📥 Baixar PDF",
+                data=_pdf_data,
+                file_name=f"Apendice_I_{file_slug}_{ano}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
 else:
     st.info(

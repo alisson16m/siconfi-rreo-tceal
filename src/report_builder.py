@@ -6,6 +6,7 @@ externo (=IF('[1]ORCAMENTO_A PREENCHER'!...)), substitui todas as células por
 valores estáticos calculados a partir da API SICONFI e salva em output_path.
 """
 
+import io
 import pathlib
 from collections import defaultdict
 from datetime import datetime
@@ -273,19 +274,17 @@ def _fill_bloco_c(ws, pivot: dict, receita_cache: dict, despesa_cache: dict) -> 
 
 def build_xlsx(
     response: SiconfiResponse,
-    output_path: str | pathlib.Path,
     template_path: str | pathlib.Path | None = None,
-) -> pathlib.Path:
+) -> bytes:
     """
-    Preenche o template XLSX com os dados da SiconfiResponse e salva em output_path.
+    Preenche o template XLSX com os dados da SiconfiResponse e retorna os bytes.
 
     Args:
         response: objeto retornado por fetch_rreo_anexo1().
-        output_path: caminho de destino do XLSX gerado.
         template_path: caminho do template vazio (padrão: templates/Modelo_Relatorio_Apendice_1.xlsx).
 
     Returns:
-        pathlib.Path do arquivo gerado.
+        bytes do XLSX gerado em memória.
     """
     tpl = pathlib.Path(template_path or _TEMPLATE_PATH)
     wb  = openpyxl.load_workbook(tpl)
@@ -303,10 +302,10 @@ def build_xlsx(
     despesa_cache = _fill_bloco_b(ws, pivot)
     _fill_bloco_c(ws, pivot, receita_cache, despesa_cache)
 
-    out = pathlib.Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out)
-    return out
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
@@ -422,22 +421,17 @@ def _make_table_style(bold_rows: list[int], neg_diff_rows: list[int] | None = No
     return TableStyle(cmds)
 
 
-def build_pdf(
-    response: SiconfiResponse,
-    output_path: str | pathlib.Path,
-) -> pathlib.Path:
+def build_pdf(response: SiconfiResponse) -> bytes:
     """
-    Gera o Apêndice I em PDF usando reportlab.
+    Gera o Apêndice I em PDF usando reportlab e retorna os bytes.
 
     Args:
         response: objeto retornado por fetch_rreo_anexo1().
-        output_path: caminho de destino do PDF gerado.
 
     Returns:
-        pathlib.Path do arquivo gerado.
+        bytes do PDF gerado em memória.
     """
-    out = pathlib.Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.BytesIO()
 
     pivot = _pivot_items(response.items)
     styles = getSampleStyleSheet()
@@ -494,7 +488,7 @@ def build_pdf(
     story.append(tbl_c)
 
     doc = SimpleDocTemplate(
-        str(out),
+        buf,
         pagesize=landscape(A4),
         leftMargin=1.0 * cm,
         rightMargin=1.0 * cm,
@@ -502,4 +496,5 @@ def build_pdf(
         bottomMargin=1.0 * cm,
     )
     doc.build(story)
-    return out
+    buf.seek(0)
+    return buf.getvalue()

@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-05-06
+
+### Added
+- Cache de `fetch_data_status()` via `_cached_fetch_status` com `@st.cache_data(ttl=300)`, evitando chamadas redundantes ao endpoint de entregas na mesma sessão.
+- Log de tempo total da operação de consulta com `time.perf_counter()` (nível INFO, formato `tempo_total=%.2fs`).
+
+### Changed
+- Geração de XLSX e PDF migrada para `io.BytesIO`: `build_xlsx` e `build_pdf` retornam `bytes` diretamente, sem gravação em disco.
+- Fluxo de geração de arquivos alterado para sob demanda: o `SiconfiResponse` é armazenado no `session_state`; XLSX e PDF são gerados apenas ao clicar nos botões correspondentes (`st.button` → `st.download_button`), sem nova consulta à API.
+- Testes de `build_xlsx` e `build_pdf` atualizados para a nova API que retorna `bytes` (removidas referências a `tmp_path`).
+
+---
+
 ## [1.1.0] - 2026-05-06
 
 ### Added
