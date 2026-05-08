@@ -46,6 +46,11 @@ _SK_DATA     = "metric_data_status"
 _ID_ENTES_AL = frozenset(e.id_ente for e in ENTES_AL)
 _ANOS_PAINEL = 5  # últimos N exercícios completos exibidos no painel
 
+# ── Lista de entes (compartilhada entre abas) ─────────────────────────────────
+_estado = next(e for e in ENTES_AL if e.esfera == "E")
+_municipios = sorted((e for e in ENTES_AL if e.esfera == "M"), key=lambda e: e.nome)
+ENTES_ORDENADOS: list[Ente] = [_estado] + _municipios
+
 
 def _slug(nome: str) -> str:
     normalizado = unicodedata.normalize("NFKD", nome)
@@ -203,7 +208,6 @@ st.set_page_config(
 st.markdown(
     """<style>
     div.block-container { padding-top: 1.5rem; }
-    section[data-testid="stSidebar"] > div:first-child { padding-top: 3rem; }
     div[data-baseweb="tab-list"] { overflow-x: auto !important; flex-wrap: nowrap !important; gap: 4px; }
     button[data-baseweb="tab"] { white-space: nowrap !important; flex-shrink: 0 !important; min-width: max-content !important; }
     button[data-baseweb="tab"] p { white-space: nowrap !important; }
@@ -211,34 +215,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Cabeçalho do app ──────────────────────────────────────────────────────────
 
-with st.sidebar:
-    st.markdown("### Gerador de Relatórios do SICONFI")
-    st.caption("Diretoria de Coordenação de Técnicos (DCT)")
-    st.caption(f"Versão {_VERSION}")
-    st.divider()
-    st.markdown("**⚙️ Parâmetros**")
-
-    estado = next(e for e in ENTES_AL if e.esfera == "E")
-    municipios = sorted((e for e in ENTES_AL if e.esfera == "M"), key=lambda e: e.nome)
-    entes_ordenados: list[Ente] = [estado] + municipios
-
-    ente: Ente = st.selectbox(
-        "Ente fiscal",
-        options=entes_ordenados,
-        format_func=lambda e: e.nome,
-        index=0,
-    )
-
-    ano_atual = datetime.now().year
-    exercicio: int = st.selectbox(
-        "Exercício",
-        options=list(range(ano_atual - 1, 2019, -1)),
-        index=0,
-    )
-
-    gerar = st.button("🔄 Gerar Relatório", type="primary", use_container_width=True)
+st.markdown(f"### 🏛️ Gerador de Relatórios do SICONFI &nbsp; <small style='color:gray;font-weight:normal'>Versão {_VERSION} · DCT/TCE-AL</small>", unsafe_allow_html=True)
+st.divider()
 
 # ── Abas principais ───────────────────────────────────────────────────────────
 
@@ -247,11 +227,33 @@ tab_relatorio, tab_painel = st.tabs(["📊 Relatório", "🗺️ Painel de Entre
 # ── Aba 1: Relatório ──────────────────────────────────────────────────────────
 
 with tab_relatorio:
-    st.title("Dados de Execução Orçamentária")
+    st.subheader("Dados de Execução Orçamentária")
     st.caption(
         "Dados com base no Balanço Orçamentário — Anexo I do Relatório Resumido "
         "de Execução Orçamentária (RREO) do 6º Bimestre"
     )
+    st.divider()
+
+    # ── Parâmetros inline ─────────────────────────────────────────────────────
+    col_ente, col_exercicio, col_btn = st.columns([5, 2, 2])
+    with col_ente:
+        ente: Ente = st.selectbox(
+            "Ente fiscal",
+            options=ENTES_ORDENADOS,
+            format_func=lambda e: e.nome,
+            index=0,
+        )
+    with col_exercicio:
+        ano_atual = datetime.now().year
+        exercicio: int = st.selectbox(
+            "Exercício",
+            options=list(range(ano_atual - 1, 2019, -1)),
+            index=0,
+        )
+    with col_btn:
+        st.markdown('<div style="margin-top:28px"></div>', unsafe_allow_html=True)
+        gerar = st.button("🔄 Gerar Relatório", type="primary", use_container_width=True)
+
     st.divider()
 
     # Invalida cache quando os parâmetros mudam
@@ -372,8 +374,7 @@ with tab_relatorio:
 
     else:
         st.info(
-            "👈 Selecione o **ente fiscal** e o **exercício** na barra lateral "
-            "e clique em **Gerar Relatório**."
+            "Selecione o **ente fiscal** e o **exercício** acima e clique em **Gerar Relatório**."
         )
 
     st.divider()
@@ -385,4 +386,4 @@ with tab_relatorio:
 # ── Aba 2: Painel de Entregas ─────────────────────────────────────────────────
 
 with tab_painel:
-    _render_painel(entes_ordenados)
+    _render_painel(ENTES_ORDENADOS)
