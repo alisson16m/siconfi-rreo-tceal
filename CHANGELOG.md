@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-05-08
+
+### Added
+- Nova aba **Painel de Entregas**: tabela-pivot exibindo o status de entrega do RREO 6º Bimestre para todos os 103 entes de Alagoas (Estado + 102 municípios) nos últimos 5 exercícios.
+- Filtro de ente fiscal no painel (todos os entes ou ente específico) e filtro de exercícios (multiselect com todos os anos disponíveis pré-selecionados).
+- Linha de totais ao fim da tabela indicando quantos entes entregaram por exercício, com destaque visual em azul `#1f4e79`.
+- Nova função `fetch_status_todos_entes_ano()` em `siconfi_client.py`: consultas paralelas (10 workers via `ThreadPoolExecutor`) ao endpoint `/extrato_entregas` para todos os entes de um exercício.
+- Dependência `pandas==2.3.3` adicionada a `requirements.txt`.
+
+### Changed
+- Estrutura do `app.py` migrada para `st.tabs` com duas abas: **📊 Relatório** e **🗺️ Painel de Entregas**.
+- CSS das abas reforçado com `!important` para evitar truncamento do texto dos títulos.
+
+---
+
 ## [1.2.0] - 2026-05-06
 
 ### Added

@@ -41,6 +41,7 @@ Divergências em relação ao briefing original:
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -211,3 +212,29 @@ def fetch_data_status(id_ente: str, exercicio: int) -> str | None:
             return item.get("data_status")
 
     return None
+
+
+def fetch_status_todos_entes_ano(
+    exercicio: int, id_entes: frozenset[str]
+) -> dict[str, bool]:
+    """
+    Retorna {id_ente: entregou} para todos os entes informados no exercício.
+
+    Faz consultas individuais ao /extrato_entregas em paralelo (10 workers).
+    Retorna True para entes com data_status não-nulo, False caso contrário.
+    """
+    def _fetch_one(id_ente: str) -> tuple[str, bool]:
+        data_status = fetch_data_status(id_ente, exercicio)
+        return id_ente, data_status is not None
+
+    resultado: dict[str, bool] = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_fetch_one, eid): eid for eid in id_entes}
+        for future in as_completed(futures):
+            try:
+                eid, entregou = future.result()
+                resultado[eid] = entregou
+            except Exception as exc:
+                logger.warning("fetch_status_todos_entes_ano: erro ao consultar ente: %s", exc)
+
+    return resultado
