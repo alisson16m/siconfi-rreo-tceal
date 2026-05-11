@@ -6,12 +6,14 @@ Estratégia: extrai texto bruto (extract_text) das páginas que contêm
 Não usa extract_tables() pois os PDFs do SICONFI não têm bordas de célula
 uniformes nas linhas de dados.
 
+Suporta dois formatos:
+  - PDFs gerados por sistemas municipais (ex.: Água Branca): cabeçalho "RREO - ANEXO I"
+  - PDFs extraídos diretamente do portal SICONFI (ex.: Anadía): "RREO-Anexo 01 | Tabela 1.0"
+
 Limitações:
   - Requer PDF com texto extraível (não escaneado).
-  - Otimizado para PDFs exportados pelo portal SICONFI / sistemas municipais.
   - Apenas o Anexo I (Balanço Orçamentário) é processado; demais anexos são ignorados.
-  - Valores percentuais (% bimestre / % acumulado) são descartados — não fazem
-    parte do modelo de dados da API e são recalculados pelo report_builder.
+  - Valores percentuais (% bimestre / % acumulado) são descartados.
 """
 
 import io
@@ -24,9 +26,11 @@ import pdfplumber
 from .report_builder import _AR, _DA, _DI, _EM, _LI, _PA, _PG, _PI, _RK
 from .siconfi_client import SiconfiResponse
 
-# ── Índices de coluna nos valores extraídos de cada linha ─────────────────────
-# Receitas: [PI, PA, NoBim, %(b/a), AoBim(c), %(c/a), Saldo]
-_REC_IDX = {_PI: 0, _PA: 1, _AR: 4}
+# Valores abaixo deste limite absoluto são tratados como percentuais e ignorados
+# na identificação algébrica do AoBim.
+_PCT_CUTOFF = 1000.0
+
+# ── Índices de coluna fixos para despesas ────────────────────────────────────
 # Despesas: [DI, DA, NoBim, AoBim(f), Saldo(g), NoBim, AoBim(h), Saldo(i), Pago(j), RPNP(k)]
 _DESP_IDX = {_DI: 0, _DA: 1, _EM: 3, _LI: 6, _PG: 8, _RK: 9}
 
@@ -39,11 +43,9 @@ def _norm(text: str) -> str:
 
 
 # ── Mapeamento label normalizado → cod_conta ──────────────────────────────────
-# Chave: resultado de _norm(label). Valor: cod_conta da API ou None (ignorar).
-# Inclui variações comuns encontradas em PDFs de diferentes sistemas municipais.
 
 _RECEITA_LABEL_COD: dict[str, str | None] = {
-    # Totais / cabeçalhos — ignorados (calculados pelo report_builder)
+    # Totais calculados — ignorados
     "RECEITAS (EXCETO INTRA-ORCAMENTARIAS) (I)": None,
     "SUBTOTAL DAS RECEITAS (III) = (I + II)": None,
     "SUBTOTAL DAS RECEITAS (III)": None,
@@ -53,6 +55,10 @@ _RECEITA_LABEL_COD: dict[str, str | None] = {
     "DEFICIT (VI)": None,
     "TOTAL (VII) = (V + VI)": None,
     "TOTAL (VII)": None,
+    "TOTAL DAS RECEITAS (I + II)": None,
+    "TOTAL DAS RECEITAS": None,
+    "TOTAL COM DEFICIT (VII) = (V + VI)": None,
+    "TOTAL COM DEFICIT": None,
     "SALDOS DE EXERCICIOS ANTERIORES": None,
     "RECURSOS ARRECADADOS EM EXERCICIOS ANTERIORES - RPPS": None,
     "SUPERAVIT FINANCEIRO UTILIZADO PARA CREDITOS ADICIONAIS": None,
@@ -84,18 +90,17 @@ _RECEITA_LABEL_COD: dict[str, str | None] = {
     "TRANSFERENCIAS DE CAPITAL": "TransferenciasDeCapital",
     "OUTRAS RECEITAS DE CAPITAL": None,
     # Intra-orçamentárias
-    "RECEITAS (INTRA-ORCAMENTARIAS) (II)": None,  # total — calculado
+    "RECEITAS (INTRA-ORCAMENTARIAS) (II)": None,
     "RECEITAS INTRA-ORCAMENTARIAS": None,
 }
 
-# Para a seção intra, "RECEITAS CORRENTES" mapeia para ReceitasCorrentesIntra
 _RECEITA_INTRA_LABEL_COD: dict[str, str | None] = {
     "RECEITAS CORRENTES": "ReceitasCorrentesIntra",
-    "RECEITAS DE CAPITAL": None,  # ReceitasDeCapitalIntra — ignorado (None em _BLOCO_A)
+    "RECEITAS DE CAPITAL": None,
 }
 
 _DESPESA_LABEL_COD: dict[str, str | None] = {
-    # Totais / cabeçalhos — ignorados
+    # Totais calculados — ignorados
     "DESPESAS (EXCETO INTRA-ORCAMENTARIAS) (VIII)": None,
     "DESPESAS (EXCETO INTRA-ORCAMENTARIAS) (VII)": None,
     "SUBTOTAL DAS DESPESAS (X) = (VIII + IX)": None,
@@ -106,6 +111,10 @@ _DESPESA_LABEL_COD: dict[str, str | None] = {
     "SUPERAVIT (XIII)": None,
     "TOTAL (XIV) = (XII + XIII)": None,
     "TOTAL (XIV)": None,
+    "TOTAL DAS DESPESAS (VIII + IX)": None,
+    "TOTAL DAS DESPESAS": None,
+    "TOTAL COM SUPERAVIT (XIV) = (XII + XIII)": None,
+    "TOTAL COM SUPERAVIT": None,
     "RESERVA DO RPPS": None,
     "OPERACOES DE CREDITO - MERCADO INTERNO": None,
     "OPERACOES DE CREDITO - MERCADO EXTERNO": None,
@@ -122,7 +131,6 @@ _DESPESA_LABEL_COD: dict[str, str | None] = {
     "RESERVA DE CONTINGENCIA": "ReservaDeContingencia",
 }
 
-# Para a seção intra, mapeamentos distintos
 _DESPESA_INTRA_LABEL_COD: dict[str, str | None] = {
     "DESPESAS CORRENTES": "DespesasCorrentesIntra",
     "DESPESAS DE CAPITAL": "DespesasDeCapitalIntra",
@@ -155,7 +163,6 @@ def _split_line(line: str) -> tuple[str, list[float]] | None:
     Divide 'LABEL  1.234,56  2.345,67  ...' em (label, [valores]).
     Retorna None se a linha não tiver valores numéricos.
     """
-    # Primeiro número BRL ou traço isolado na linha
     m = re.search(r'(?<!\S)(-?\d{1,3}(?:\.\d{3})*,\d+|-(?=\s|$))', line)
     if not m:
         return None
@@ -188,46 +195,91 @@ def _make_item(nome_ente: str, exercicio: int, cod_conta: str,
     }
 
 
+def _find_ar(values: list[float]) -> float:
+    """
+    Identifica algebricamente o AoBim(c) nas receitas.
+
+    PDFs municipais têm 7 valores: [PI, PA, NoBim, %(b/a), AoBim(c), %(c/a), Saldo]
+    PDFs do portal SICONFI podem omitir colunas percentuais quando NoBim=0,
+    resultando em 6 ou menos valores.
+
+    Estratégia: filtra valores percentuais (|v| < _PCT_CUTOFF) e usa
+    AoBim = PA - Saldo (último valor monetário).
+    """
+    if len(values) < 2:
+        return 0.0
+
+    pa = values[1]
+    # Filtra percentuais: mantém zeros e valores monetários (|v| >= _PCT_CUTOFF)
+    monetary = [v for v in values if v == 0.0 or abs(v) >= _PCT_CUTOFF]
+
+    if len(monetary) < 2:
+        # Não há monetários suficientes para cálculo algébrico
+        return values[-1] if values else 0.0
+
+    saldo = monetary[-1]
+    candidate = pa - saldo
+
+    # Verifica se o candidato existe na lista de valores monetários
+    for v in monetary:
+        if abs(v - candidate) < 1.0:
+            return v
+
+    # Fallback: tenta índice fixo 4 (formato 7 valores) ou 3 (6 valores)
+    if len(values) >= 7:
+        return values[4]
+    if len(values) >= 6:
+        return values[3]
+    return monetary[-1]
+
+
 # ── Parser das seções ─────────────────────────────────────────────────────────
+
+def _is_receitas_intra_trigger(norm_text: str) -> bool:
+    """True se a linha marca o início da seção de RECEITAS intra-orçamentária."""
+    return "INTRA-OR" in norm_text and "EXCETO" not in norm_text and "DESPESA" not in norm_text
+
+
+def _is_despesas_intra_trigger(norm_text: str) -> bool:
+    """True se a linha marca o início da seção de DESPESAS intra-orçamentária."""
+    return "INTRA-OR" in norm_text and "EXCETO" not in norm_text and "RECEITA" not in norm_text
+
 
 def _parse_receitas(text: str, nome_ente: str, exercicio: int) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     in_intra = False
-    # Detecta início da seção intra pelo cabeçalho "RECEITAS INTRA-ORÇAMENTÁRIAS"
-    intra_trigger = _norm("RECEITAS INTRA-OR")
 
     for line in text.splitlines():
         result = _split_line(line)
         if not result:
-            # Detecta entrada na seção intra mesmo sem valores na linha
-            if intra_trigger in _norm(line):
+            if _is_receitas_intra_trigger(_norm(line)):
                 in_intra = True
             continue
         label, values = result
         label_n = _norm(label)
 
-        # Detecta seção intra (a linha pode ou não ter valores)
-        if intra_trigger in label_n:
+        if _is_receitas_intra_trigger(label_n):
             in_intra = True
 
         mapping = _RECEITA_INTRA_LABEL_COD if in_intra else _RECEITA_LABEL_COD
 
-        # Busca exata primeiro, depois prefixo
         cod = mapping.get(label_n)
         if cod is None and label_n not in mapping:
-            # Tenta correspondência por prefixo (para variações como "RECEITAS CORRENTES.")
             cod = next(
                 (v for k, v in mapping.items() if label_n.startswith(k[:30])),
                 "NOT_FOUND",
             )
             if cod == "NOT_FOUND":
-                continue  # linha desconhecida
+                continue
         if cod is None:
-            continue  # linha mapeada explicitamente para None (ignorar)
+            continue
 
-        for col, idx in _REC_IDX.items():
-            if idx < len(values):
-                items.append(_make_item(nome_ente, exercicio, cod, col, values[idx]))
+        if len(values) > 0:
+            items.append(_make_item(nome_ente, exercicio, cod, _PI, values[0]))
+        if len(values) > 1:
+            items.append(_make_item(nome_ente, exercicio, cod, _PA, values[1]))
+        ar = _find_ar(values)
+        items.append(_make_item(nome_ente, exercicio, cod, _AR, ar))
 
     return items
 
@@ -235,20 +287,17 @@ def _parse_receitas(text: str, nome_ente: str, exercicio: int) -> list[dict[str,
 def _parse_despesas(text: str, nome_ente: str, exercicio: int) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     in_intra = False
-    intra_trigger = _norm("DESPESAS (INTRA-OR")
-    intra_trigger2 = _norm("DESPESAS INTRA-OR")
 
     for line in text.splitlines():
         result = _split_line(line)
         if not result:
-            ln = _norm(line)
-            if intra_trigger in ln or intra_trigger2 in ln:
+            if _is_despesas_intra_trigger(_norm(line)):
                 in_intra = True
             continue
         label, values = result
         label_n = _norm(label)
 
-        if intra_trigger in label_n or intra_trigger2 in label_n:
+        if _is_despesas_intra_trigger(label_n):
             in_intra = True
 
         mapping = _DESPESA_INTRA_LABEL_COD if in_intra else _DESPESA_LABEL_COD
@@ -278,20 +327,12 @@ def _is_anexo1_page(text: str) -> bool:
     return (
         "RREO - ANEXO I" in n
         or "BALANCO ORCAMENTARIO" in n
-        # Página de continuação (despesas): tem o marcador de saldo "(G)=(E-F)"
-        # que é exclusivo do Anexo I — não aparece em outros anexos do RREO.
         or "(G)=(E-F)" in n
+        # Formato do portal SICONFI: "RREO-Anexo 01 | Tabela 1.0"
+        or "RREO-ANEXO 01" in n
+        or "ESTAGIOS DA RECEITA ORCAMENTARIA" in n
+        or "ESTAGIOS DA DESPESA ORCAMENTARIA" in n
     )
-
-
-def _page_has_receitas(text: str) -> bool:
-    n = _norm(text)
-    return bool(re.search(r'RECEITAS\s+INICIAL', n))
-
-
-def _page_has_despesas(text: str) -> bool:
-    n = _norm(text)
-    return bool(re.search(r'DESPESAS\s+INICIAL', n))
 
 
 # ── Ponto de entrada público ──────────────────────────────────────────────────
@@ -310,7 +351,7 @@ def parse_pdf(pdf_bytes: bytes, nome_ente: str, exercicio: int) -> SiconfiRespon
         SiconfiResponse com items no mesmo formato retornado pela API.
 
     Raises:
-        ValueError: Se o PDF estiver protegido por senha.
+        ValueError: Se o PDF não for válido ou estiver protegido por senha.
         ValueError: Se nenhuma página do Anexo I for encontrada.
     """
     try:
@@ -323,20 +364,15 @@ def parse_pdf(pdf_bytes: bytes, nome_ente: str, exercicio: int) -> SiconfiRespon
             ) from exc
         raise ValueError(f"Não foi possível abrir o PDF: {exc}") from exc
 
-    receitas_text = ""
-    despesas_text = ""
+    anexo1_text = ""
 
     with pdf_file:
         for page in pdf_file.pages:
             text = page.extract_text() or ""
-            if not _is_anexo1_page(text):
-                continue
-            if _page_has_receitas(text):
-                receitas_text += "\n" + text
-            if _page_has_despesas(text):
-                despesas_text += "\n" + text
+            if _is_anexo1_page(text):
+                anexo1_text += "\n" + text
 
-    if not receitas_text and not despesas_text:
+    if not anexo1_text:
         raise ValueError(
             "Nenhuma página do RREO Anexo I (Balanço Orçamentário) encontrada no PDF. "
             "Verifique se o arquivo contém o demonstrativo correto "
@@ -344,10 +380,8 @@ def parse_pdf(pdf_bytes: bytes, nome_ente: str, exercicio: int) -> SiconfiRespon
         )
 
     items: list[dict[str, Any]] = []
-    if receitas_text:
-        items.extend(_parse_receitas(receitas_text, nome_ente, exercicio))
-    if despesas_text:
-        items.extend(_parse_despesas(despesas_text, nome_ente, exercicio))
+    items.extend(_parse_receitas(anexo1_text, nome_ente, exercicio))
+    items.extend(_parse_despesas(anexo1_text, nome_ente, exercicio))
 
     return SiconfiResponse(
         items=items,

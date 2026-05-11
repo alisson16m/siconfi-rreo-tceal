@@ -16,6 +16,9 @@ _PDF_PATH = FIXTURES_DIR / "RREO-Agua Branca.pdf"
 _NOME_ENTE = "Prefeitura Municipal de Água Branca - AL"
 _EXERCICIO = 2025
 
+_PDF_ANADIA = FIXTURES_DIR / "RREO-Anadia.pdf"
+_NOME_ANADIA = "Prefeitura Municipal de Anadia - AL"
+
 
 @pytest.fixture(scope="module")
 def agua_branca_pdf() -> bytes:
@@ -25,6 +28,16 @@ def agua_branca_pdf() -> bytes:
 @pytest.fixture(scope="module")
 def agua_branca_resp(agua_branca_pdf) -> SiconfiResponse:
     return parse_pdf(agua_branca_pdf, _NOME_ENTE, _EXERCICIO)
+
+
+@pytest.fixture(scope="module")
+def anadia_pdf() -> bytes:
+    return _PDF_ANADIA.read_bytes()
+
+
+@pytest.fixture(scope="module")
+def anadia_resp(anadia_pdf) -> SiconfiResponse:
+    return parse_pdf(anadia_pdf, _NOME_ANADIA, _EXERCICIO)
 
 
 class TestParsePdf:
@@ -92,4 +105,51 @@ class TestParsePdf:
 
     def test_resultado_pode_gerar_pdf(self, agua_branca_resp):
         pdf_bytes = build_pdf(agua_branca_resp)
+        assert pdf_bytes[:4] == b"%PDF"
+
+
+class TestParsePdfAnadia:
+    """Testa o parser com PDF extraído do portal SICONFI (formato Anadia)."""
+
+    def test_retorna_siconfi_response(self, anadia_resp):
+        assert isinstance(anadia_resp, SiconfiResponse)
+
+    def test_items_nao_vazio(self, anadia_resp):
+        assert len(anadia_resp.items) > 0
+
+    def test_todos_items_tem_cod_conta_e_coluna(self, anadia_resp):
+        for item in anadia_resp.items:
+            assert item.get("cod_conta"), f"item sem cod_conta: {item}"
+            assert item.get("coluna"), f"item sem coluna: {item}"
+
+    def test_todos_items_tem_valor_float(self, anadia_resp):
+        for item in anadia_resp.items:
+            assert isinstance(item["valor"], float)
+
+    def test_contem_receitas_correntes(self, anadia_resp):
+        codigos = {item["cod_conta"] for item in anadia_resp.items}
+        assert "ReceitasCorrentes" in codigos
+
+    def test_contem_despesas_correntes(self, anadia_resp):
+        codigos = {item["cod_conta"] for item in anadia_resp.items}
+        assert "DespesasCorrentes" in codigos
+
+    def test_receitas_realizadas_valor_correto(self, anadia_resp):
+        pivot = _pivot_items(anadia_resp.items)
+        contas = ("ReceitasCorrentes", "ReceitasCorrentesIntra", "ReceitasDeCapital")
+        total = sum(_g(pivot, c, _AR) for c in contas)
+        assert total == pytest.approx(108_929_496.47, rel=1e-4)
+
+    def test_despesas_empenhadas_valor_correto(self, anadia_resp):
+        pivot = _pivot_items(anadia_resp.items)
+        contas = ("DespesasCorrentes", "DespesasDeCapital")
+        total = sum(_g(pivot, c, _EM) for c in contas)
+        assert total == pytest.approx(111_335_084.01, rel=1e-4)
+
+    def test_resultado_pode_gerar_xlsx(self, anadia_resp):
+        xlsx_bytes = build_xlsx(anadia_resp)
+        assert isinstance(xlsx_bytes, bytes) and len(xlsx_bytes) > 0
+
+    def test_resultado_pode_gerar_pdf(self, anadia_resp):
+        pdf_bytes = build_pdf(anadia_resp)
         assert pdf_bytes[:4] == b"%PDF"
