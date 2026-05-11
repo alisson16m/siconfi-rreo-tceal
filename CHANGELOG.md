@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-05-11
+
+### Added
+- Novos módulos `src/siconfi_rgf_client.py` e `src/rgf_report_builder.py`: cliente paralelo e gerador de relatório para o RGF Anexo 01 (Despesa Total com Pessoal).
+- Novo módulo `src/rgf_limites.py`: classificador de situação fiscal conforme limites LRF (Arts. 19, 20 e 22 da LC 101/2000) com categorias Normal, Alerta, Prudencial e Máximo.
+- Fixtures de PDF para testes: `tests/fixtures/RREO-Agua Branca.pdf` e `tests/fixtures/RREO-Anadia.pdf`.
+
+### Changed
+- Aba **Upload de PDF** (Prestações de Contas): campo de texto livre substituído por `st.selectbox` com lista de entes, gerando o nome formal automaticamente (ex.: "Prefeitura Municipal de Maceió - AL").
+- Ordem das abas alterada: **📄 Upload de PDF** passa a ser a primeira aba; **📡 Consulta SICONFI** passa para segunda posição.
+- Título da aba **Painel de Entregas** renomeado para "🗺️ Painel de Entregas — SICONFI".
+- Cabeçalho de `pages/prestacoes_de_contas.py` simplificado para `### 📊 Prestações de Contas` com subtítulo via `st.caption`.
+- `app.py`: links de navegação explícitos no sidebar via `st.page_link` (position="hidden" na navegação); título da página RGF renomeado para "Alerta de Despesas com Pessoal".
+- Cabeçalho de `pages/02_RGF_Despesa_Pessoal.py` simplificado (removida versão inline do cabeçalho).
+- Aviso "Data de envio não disponível" removido da aba de Upload (informação redundante).
+- CSS: removida regra `padding-top` do `block-container`.
+
+---
+
 ## [1.4.0] - 2026-05-11
 
 ### Added

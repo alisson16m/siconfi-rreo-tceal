@@ -49,11 +49,7 @@ def _fmt_pct(valor: float) -> str:
     return f"{valor:.2f}%".replace(".", ",")
 
 
-st.markdown(
-    f"### 🏛️ RGF — Despesa Total com Pessoal &nbsp;"
-    f"<small style='color:gray;font-weight:normal'>Versão {_VERSION} · DCT/TCE-AL</small>",
-    unsafe_allow_html=True,
-)
+st.markdown("### 🏛️ RGF — Despesa Total com Pessoal")
 st.caption(
     "Consulta o Demonstrativo da Despesa com Pessoal (RGF Anexo 01) via API do SICONFI "
     "e classifica os entes conforme os limites da Lei de Responsabilidade Fiscal (LC 101/2000)."

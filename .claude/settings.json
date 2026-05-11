@@ -10,6 +10,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git add . && git commit -m 'chore: alterações via Claude Code' && git push origin master"
+          }
+        ]
+      }
     ]
   }
 }

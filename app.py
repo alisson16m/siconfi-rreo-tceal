@@ -12,13 +12,18 @@ st.set_page_config(
     layout="wide",
 )
 
+_pages = [
+    st.Page("pages/prestacoes_de_contas.py", title="Prestações de Contas", icon="📊"),
+    st.Page("pages/02_RGF_Despesa_Pessoal.py", title="Alerta de Despesas com Pessoal", icon="📋"),
+]
+
+pg = st.navigation(_pages, position="hidden")
+
 with st.sidebar:
-    st.markdown(f"## 🏛️ Gerador de Relatórios")
+    st.markdown("## 🏛️ Gerador de Relatórios")
     st.caption(f"v{_VERSION} · DCT/TCE-AL")
     st.divider()
+    for page in _pages:
+        st.page_link(page, label=f"{page.icon} {page.title}")
 
-pg = st.navigation([
-    st.Page("pages/prestacoes_de_contas.py", title="Prestações de Contas", icon="📊"),
-    st.Page("pages/02_RGF_Despesa_Pessoal.py", title="RGF Despesa Pessoal", icon="📋"),
-])
 pg.run()

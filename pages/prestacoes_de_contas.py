@@ -209,7 +209,6 @@ def _render_painel(entes_ordenados: list[Ente]) -> None:
 
 st.markdown(
     """<style>
-    div.block-container { padding-top: 1.5rem; }
     div[data-baseweb="tab-list"] { overflow-x: auto !important; flex-wrap: nowrap !important; gap: 4px; }
     button[data-baseweb="tab"] { white-space: nowrap !important; flex-shrink: 0 !important; min-width: max-content !important; }
     button[data-baseweb="tab"] p { white-space: nowrap !important; }
@@ -219,19 +218,19 @@ st.markdown(
 
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
 
-st.markdown(
-    f"### 🏛️ Gerador de Relatórios do SICONFI &nbsp;"
-    f"<small style='color:gray;font-weight:normal'>Versão {_VERSION} · DCT/TCE-AL</small>",
-    unsafe_allow_html=True,
+st.markdown("### 📊 Prestações de Contas")
+st.caption(
+    "Dados com base no Balanço Orçamentário — Anexo I do Relatório Resumido "
+    "de Execução Orçamentária (RREO) do 6º Bimestre"
 )
 st.divider()
 
 # ── Abas principais ───────────────────────────────────────────────────────────
 
-tab_relatorio, tab_upload, tab_painel = st.tabs([
-    "📡 Consulta SICONFI",
+tab_upload, tab_relatorio, tab_painel = st.tabs([
     "📄 Upload de PDF",
-    "🗺️ Painel de Entregas",
+    "📡 Consulta SICONFI",
+    "🗺️ Painel de Entregas — SICONFI",
 ])
 
 # ── Aba 1: Consulta SICONFI ───────────────────────────────────────────────────
@@ -243,8 +242,6 @@ with tab_relatorio:
         "de Execução Orçamentária (RREO) do 6º Bimestre"
     )
     st.divider()
-
-    # ── Parâmetros inline ─────────────────────────────────────────────────────
     col_ente, col_exercicio, col_btn = st.columns([5, 2, 2])
     with col_ente:
         ente: Ente = st.selectbox(
@@ -396,19 +393,21 @@ with tab_relatorio:
 # ── Aba 2: Upload de PDF ──────────────────────────────────────────────────────
 
 with tab_upload:
-    st.subheader("Gerar Apêndice I a partir de PDF")
+    st.subheader("Relatórios e Análises Orçamentários")
     st.caption(
-        "Faça o upload de um PDF do RREO Anexo 1 (gerado por esta aplicação) "
-        "para extrair os dados e baixar o relatório nos formatos XLSX e PDF."
+        "Faça o upload do Balanço Orçamentário - Anexo I do RREO ou de todo o RREO "
+        "do jurisdicionado para que os dados sejam extraídos e o relatórios sejam gerados."
     )
     st.divider()
 
     col_nome, col_ano = st.columns([5, 2])
     with col_nome:
-        pdf_nome_ente = st.text_input(
-            "Nome do ente fiscal",
-            placeholder="Ex.: Prefeitura Municipal de Maceió - AL",
-            key="pdf_input_nome",
+        pdf_ente_selecionado: Ente = st.selectbox(
+            "Ente fiscal",
+            options=ENTES_ORDENADOS,
+            format_func=lambda e: e.nome,
+            index=0,
+            key="pdf_input_ente",
         )
     with col_ano:
         _ano_atual = datetime.now().year
@@ -418,6 +417,12 @@ with tab_upload:
             index=0,
             key="pdf_input_exercicio",
         )
+
+    # Gera o nome formal do ente fiscal
+    if pdf_ente_selecionado.esfera == "E":
+        pdf_nome_ente = f"Governo do Estado de {pdf_ente_selecionado.nome}"
+    else:
+        pdf_nome_ente = f"Prefeitura Municipal de {pdf_ente_selecionado.nome}"
 
     pdf_file = st.file_uploader(
         "Arquivo PDF (RREO Anexo 1)",
@@ -429,9 +434,7 @@ with tab_upload:
     processar = st.button("📊 Processar PDF", type="primary")
 
     if processar:
-        if not pdf_nome_ente.strip():
-            st.error("Informe o nome do ente fiscal antes de processar.")
-        elif pdf_file is None:
+        if pdf_file is None:
             st.error("Selecione um arquivo PDF antes de processar.")
         else:
             with st.spinner("Processando PDF..."):
@@ -472,9 +475,6 @@ with tab_upload:
         pdf_res  = pdf_rec - pdf_desp
 
         st.success(f"✅ PDF processado: **{pdf_nome}** — exercício **{pdf_ano}**")
-        st.warning(
-            "⚠️ Data de envio dos dados não disponível (origem: PDF)."
-        )
 
         col_r, col_d, col_res = st.columns(3)
         col_r.metric("Receitas Realizadas", _fmt_brl(pdf_rec))
