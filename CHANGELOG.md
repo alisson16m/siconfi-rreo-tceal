@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-05-11
+
+### Added
+- Nova aba **Upload de PDF**: permite enviar um PDF do RREO Anexo 1 (gerado por sistemas municipais ou extraído do portal SICONFI) e gerar o Apêndice I em XLSX e PDF sem consultar a API.
+- Novo módulo `src/pdf_parser.py` com parser linha a linha via `pdfplumber.extract_text()`, suportando dois formatos:
+  - PDFs gerados por sistemas municipais (cabeçalho "RREO - ANEXO I").
+  - PDFs extraídos do portal SICONFI (cabeçalho "RREO-Anexo 01 | Tabela 1.0").
+- Identificação algébrica do AoBim (`AoBim = PA - Saldo`) para lidar com PDFs SICONFI que omitem colunas percentuais quando `NoBim=0`.
+- 10 novos testes cobrindo os dois formatos de PDF (89 testes no total).
+
+### Changed
+- Sidebar de navegação migrada para `st.navigation()` (Streamlit 1.36+ API):
+  - Página principal renomeada de "app" para **Prestações de Contas** na sidebar.
+  - Cabeçalho **🏛️ Gerador de Relatórios** com versão exibido no topo da sidebar em todas as páginas.
+  - Conteúdo de `app.py` movido para `pages/prestacoes_de_contas.py`; `app.py` agora é entrypoint fino.
+- Arquivo `pages/01_Prestacoes_de_Contas.py` removido (era duplicata do conteúdo principal).
+- `st.set_page_config()` centralizado em `app.py`; removido de `pages/02_RGF_Despesa_Pessoal.py`.
+
+---
+
 ## [1.3.0] - 2026-05-08
 
 ### Added
