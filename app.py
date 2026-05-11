@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from src.municipios_al import ENTES_AL, Ente
+from src.pdf_parser import parse_pdf
 from src.report_builder import _AR, _EM, _g, _pivot_items, build_pdf, build_xlsx
 from src.siconfi_client import (
     SiconfiEmptyResponseError,
@@ -34,13 +35,20 @@ logger = logging.getLogger(__name__)
 _CONTAS_RECEITA = ("ReceitasCorrentes", "ReceitasCorrentesIntra", "ReceitasDeCapital")
 _CONTAS_DESPESA = ("DespesasCorrentes", "DespesasDeCapital")
 
-# ── Chaves de session_state ────────────────────────────────────────────────────
+# ── Chaves de session_state — aba SICONFI ─────────────────────────────────────
 _SK_RESP     = "siconfi_response"
 _SK_NOME     = "report_nome"
 _SK_ANO      = "report_ano"
 _SK_RECEITAS = "metric_receitas"
 _SK_DESPESAS = "metric_despesas"
 _SK_DATA     = "metric_data_status"
+
+# ── Chaves de session_state — aba PDF (prefixo pdf_ evita colisão) ────────────
+_SK_PDF_RESP     = "pdf_response"
+_SK_PDF_NOME     = "pdf_nome"
+_SK_PDF_ANO      = "pdf_ano"
+_SK_PDF_RECEITAS = "pdf_metric_receitas"
+_SK_PDF_DESPESAS = "pdf_metric_despesas"
 
 # ── Painel de entregas ─────────────────────────────────────────────────────────
 _ID_ENTES_AL = frozenset(e.id_ente for e in ENTES_AL)
@@ -84,7 +92,7 @@ def _cached_fetch_status(id_ente: str, exercicio: int) -> str | None:
     return fetch_data_status(id_ente=id_ente, exercicio=exercicio)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Aguarde, buscando dados na API...")
 def _cached_fetch_painel(exercicio: int) -> dict[str, bool]:
     return fetch_status_todos_entes_ano(exercicio=exercicio, id_entes=_ID_ENTES_AL)
 
@@ -222,9 +230,13 @@ st.divider()
 
 # ── Abas principais ───────────────────────────────────────────────────────────
 
-tab_relatorio, tab_painel = st.tabs(["📊 Relatório", "🗺️ Painel de Entregas"])
+tab_relatorio, tab_upload, tab_painel = st.tabs([
+    "📡 Consulta SICONFI",
+    "📄 Upload de PDF",
+    "🗺️ Painel de Entregas",
+])
 
-# ── Aba 1: Relatório ──────────────────────────────────────────────────────────
+# ── Aba 1: Consulta SICONFI ───────────────────────────────────────────────────
 
 with tab_relatorio:
     st.subheader("Dados de Execução Orçamentária")
@@ -383,7 +395,144 @@ with tab_relatorio:
         "(Secretaria do Tesouro Nacional)."
     )
 
-# ── Aba 2: Painel de Entregas ─────────────────────────────────────────────────
+# ── Aba 2: Upload de PDF ──────────────────────────────────────────────────────
+
+with tab_upload:
+    st.subheader("Gerar Apêndice I a partir de PDF")
+    st.caption(
+        "Faça o upload de um PDF do RREO Anexo 1 (gerado por esta aplicação) "
+        "para extrair os dados e baixar o relatório nos formatos XLSX e PDF."
+    )
+    st.divider()
+
+    col_nome, col_ano = st.columns([5, 2])
+    with col_nome:
+        pdf_nome_ente = st.text_input(
+            "Nome do ente fiscal",
+            placeholder="Ex.: Prefeitura Municipal de Maceió - AL",
+            key="pdf_input_nome",
+        )
+    with col_ano:
+        _ano_atual = datetime.now().year
+        pdf_exercicio: int = st.selectbox(
+            "Exercício",
+            options=list(range(_ano_atual - 1, 2019, -1)),
+            index=0,
+            key="pdf_input_exercicio",
+        )
+
+    pdf_file = st.file_uploader(
+        "Arquivo PDF (RREO Anexo 1)",
+        type=["pdf"],
+        key="pdf_uploader",
+    )
+
+    st.markdown('<div style="margin-top:8px"></div>', unsafe_allow_html=True)
+    processar = st.button("📊 Processar PDF", type="primary")
+
+    if processar:
+        if not pdf_nome_ente.strip():
+            st.error("Informe o nome do ente fiscal antes de processar.")
+        elif pdf_file is None:
+            st.error("Selecione um arquivo PDF antes de processar.")
+        else:
+            with st.spinner("Processando PDF..."):
+                try:
+                    pdf_response = parse_pdf(
+                        pdf_bytes=pdf_file.read(),
+                        nome_ente=pdf_nome_ente.strip(),
+                        exercicio=pdf_exercicio,
+                    )
+                    pdf_pivot = _pivot_items(pdf_response.items)
+                    pdf_total_receitas = sum(_g(pdf_pivot, c, _AR) for c in _CONTAS_RECEITA)
+                    pdf_total_despesas = sum(_g(pdf_pivot, c, _EM) for c in _CONTAS_DESPESA)
+
+                    st.session_state[_SK_PDF_RESP]     = pdf_response
+                    st.session_state[_SK_PDF_NOME]     = pdf_nome_ente.strip()
+                    st.session_state[_SK_PDF_ANO]      = pdf_exercicio
+                    st.session_state[_SK_PDF_RECEITAS] = pdf_total_receitas
+                    st.session_state[_SK_PDF_DESPESAS] = pdf_total_despesas
+
+                except ValueError as e:
+                    st.error(f"Erro ao processar o PDF: {e}")
+                    for k in (_SK_PDF_RESP, _SK_PDF_NOME, _SK_PDF_ANO,
+                              _SK_PDF_RECEITAS, _SK_PDF_DESPESAS):
+                        st.session_state.pop(k, None)
+                except Exception as e:
+                    st.error("Ocorreu um erro inesperado ao processar o PDF. Verifique o arquivo e tente novamente.")
+                    logger.exception("Erro não tratado no upload de PDF: %s", e)
+                    for k in (_SK_PDF_RESP, _SK_PDF_NOME, _SK_PDF_ANO,
+                              _SK_PDF_RECEITAS, _SK_PDF_DESPESAS):
+                        st.session_state.pop(k, None)
+
+    if _SK_PDF_RESP in st.session_state:
+        pdf_resp = st.session_state[_SK_PDF_RESP]
+        pdf_nome = st.session_state[_SK_PDF_NOME]
+        pdf_ano  = st.session_state[_SK_PDF_ANO]
+        pdf_rec  = st.session_state[_SK_PDF_RECEITAS]
+        pdf_desp = st.session_state[_SK_PDF_DESPESAS]
+        pdf_res  = pdf_rec - pdf_desp
+
+        st.success(f"✅ PDF processado: **{pdf_nome}** — exercício **{pdf_ano}**")
+        st.warning(
+            "⚠️ Data de envio dos dados não disponível (origem: PDF)."
+        )
+
+        col_r, col_d, col_res = st.columns(3)
+        col_r.metric("Receitas Realizadas", _fmt_brl(pdf_rec))
+        col_d.metric("Despesas Empenhadas", _fmt_brl(pdf_desp))
+        col_res.metric(
+            "Resultado Orçamentário",
+            _fmt_brl(abs(pdf_res)),
+            delta="SUPERÁVIT" if pdf_res >= 0 else "DÉFICIT",
+            delta_color="normal",
+        )
+
+        st.divider()
+
+        pdf_file_slug = _slug(pdf_nome)
+        col_xlsx, col_pdf = st.columns(2)
+        with col_xlsx:
+            if st.button("⬇ Gerar XLSX", use_container_width=True, key="pdf_btn_xlsx"):
+                with st.spinner("Gerando XLSX..."):
+                    _pdf_xlsx_data = build_xlsx(pdf_resp)
+                    logger.info("XLSX gerado via PDF: Apendice_I_%s_%d.xlsx", pdf_file_slug, pdf_ano)
+                st.download_button(
+                    label="📥 Baixar XLSX",
+                    data=_pdf_xlsx_data,
+                    file_name=f"Apendice_I_{pdf_file_slug}_{pdf_ano}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="pdf_dl_xlsx",
+                )
+        with col_pdf:
+            if st.button("⬇ Gerar PDF", use_container_width=True, key="pdf_btn_pdf"):
+                with st.spinner("Gerando PDF..."):
+                    _pdf_pdf_data = build_pdf(pdf_resp)
+                    logger.info("PDF gerado via PDF: Apendice_I_%s_%d.pdf", pdf_file_slug, pdf_ano)
+                st.download_button(
+                    label="📥 Baixar PDF",
+                    data=_pdf_pdf_data,
+                    file_name=f"Apendice_I_{pdf_file_slug}_{pdf_ano}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="pdf_dl_pdf",
+                )
+    else:
+        if not processar:
+            st.info(
+                "Informe o **nome do ente**, o **exercício**, selecione o **arquivo PDF** "
+                "e clique em **Processar PDF**."
+            )
+
+    st.divider()
+    st.caption(
+        "O PDF deve conter tabelas extraíveis (não escaneadas). "
+        "Otimizado para PDFs gerados por esta aplicação."
+    )
+
+
+# ── Aba 3: Painel de Entregas ─────────────────────────────────────────────────
 
 with tab_painel:
     _render_painel(ENTES_ORDENADOS)
