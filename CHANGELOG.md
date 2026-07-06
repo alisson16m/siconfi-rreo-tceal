@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.3] - 2026-07-06
+
+### Removed
+- Campo **"Data de Extração (Siconfi)"** na página RGF. O Termo de Alerta passa a usar sempre a data em que o documento é gerado (`datetime.now()`), já que a API do Siconfi não oferece consulta histórica por data de extração — o campo permitia selecionar uma data arbitrária e desalinhada da consulta real.
+
+---
+
 ## [1.5.2] - 2026-07-06
 
 ### Fixed
