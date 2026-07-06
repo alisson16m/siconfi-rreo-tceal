@@ -273,16 +273,31 @@ def gerar_alerta_docx(
         )
 
     # ── Entes sem dados no SICONFI ────────────────────────────────────────────
+    # Inserida entre a tabela (parágrafo 10 = "Fonte: ...", 11 = linha em branco)
+    # e o bloco de assinaturas, cujo primeiro parágrafo (12) é sempre
+    # "Tribunal de Contas do Estado de Alagoas" em ambos os templates
+    # (Executivo/Legislativo). Usa insert_paragraph_before para posicionar o
+    # texto ali, em vez de doc.add_paragraph(), que anexaria ao final do
+    # documento (após as assinaturas).
     if resultado.entes_sem_dados:
-        doc.add_paragraph()
-        doc.add_paragraph(
+        assinatura_inicio = doc.paragraphs[12]
+
+        def _inserir_paragrafo_padrao(texto: str):
+            paragrafo = assinatura_inicio.insert_paragraph_before(texto)
+            paragrafo.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            for run in paragrafo.runs:
+                run.font.name = "Times New Roman"
+            return paragrafo
+
+        _inserir_paragrafo_padrao(
             "Relacionam-se abaixo os entes que, até a data de extração dos "
             f"dados ({data_str}), não haviam enviado ao SICONFI as "
             "informações referentes à Despesa com Pessoal (RGF Anexo 01) "
             "no período consultado:"
         )
         for i, nome in enumerate(resultado.entes_sem_dados, start=1):
-            doc.add_paragraph(f"{i}. {nome}")
+            _inserir_paragrafo_padrao(f"{i}. {nome}")
+        assinatura_inicio.insert_paragraph_before()
 
     buf = io.BytesIO()
     doc.save(buf)

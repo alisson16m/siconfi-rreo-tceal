@@ -3,6 +3,7 @@
 import io
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from src.rgf_report_builder import gerar_alerta_docx
 from src.rgf_limites import Situacao
@@ -51,6 +52,34 @@ def test_alerta_com_entes_sem_dados_inclui_texto_e_lista_numerada():
     )
     assert "1. Maceió" in textos
     assert "2. Palmeira dos Índios" in textos
+
+    # A seção deve ficar após a tabela ("Fonte: ...") e antes das assinaturas
+    # ("Tribunal de Contas do Estado de Alagoas").
+    idx_fonte = next(i for i, t in enumerate(textos) if t.startswith("Fonte:"))
+    idx_assinatura = next(
+        i for i, t in enumerate(textos)
+        if t == "Tribunal de Contas do Estado de Alagoas"
+    )
+    idx_intro = next(
+        i for i, t in enumerate(textos) if "não haviam enviado ao SICONFI" in t
+    )
+    idx_item1 = textos.index("1. Maceió")
+    idx_item2 = textos.index("2. Palmeira dos Índios")
+    assert idx_fonte < idx_intro < idx_item1 < idx_item2 < idx_assinatura
+
+    # Formatação deve seguir o padrão do corpo do documento: Times New Roman,
+    # sem negrito/itálico, justificado.
+    doc = Document(io.BytesIO(doc_bytes))
+    for texto_alvo in (
+        "1. Maceió",
+        "2. Palmeira dos Índios",
+    ):
+        paragrafo = next(p for p in doc.paragraphs if p.text == texto_alvo)
+        assert paragrafo.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
+        for run in paragrafo.runs:
+            assert run.font.name == "Times New Roman"
+            assert not run.bold
+            assert not run.italic
 
 
 def test_alerta_sem_entes_sem_dados_nao_inclui_secao():
