@@ -63,7 +63,7 @@ col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 2, 1, 1])
 ano_atual = datetime.now().year
 
 with col1:
-    exercicio: int = st.selectbox("Exercício", list(range(ano_atual - 1, 2019, -1)), index=0)
+    exercicio: int = st.selectbox("Exercício", list(range(ano_atual, 2019, -1)), index=0)
 
 with col2:
     esfera_label: str = st.selectbox("Esfera", ["Municipal", "Estadual"], index=0)
