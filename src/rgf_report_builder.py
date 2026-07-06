@@ -154,8 +154,9 @@ def gerar_alerta_docx(
     """Gera Termo de Alerta .docx usando o modelo institucional como base.
 
     Abre o documento template correspondente ao poder (Executivo/Legislativo),
-    substitui o período e a data de extração nos parágrafos corretos e
-    popula a tabela com os entes críticos do resultado.
+    substitui o período e a data de extração nos parágrafos corretos,
+    popula a tabela com os entes críticos do resultado e, ao final, lista
+    os entes que não enviaram dados ao SICONFI no período consultado.
 
     Args:
         resultado: Resultado da consulta RGF.
