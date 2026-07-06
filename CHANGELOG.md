@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] - 2026-07-06
+
+### Added
+- Campo **"Data de Extração (Siconfi)"** na barra de filtros da página RGF (`st.date_input`), permitindo ao usuário informar a data em que os dados foram extraídos do Siconfi. Valor padrão: data atual.
+- Pasta `Modelo de Alerta de Despesa com Pessoal/` como fonte de templates institucionais `.docx` para geração dos alertas.
+
+### Changed
+- `gerar_alerta_docx` em `src/rgf_report_builder.py` reescrita para usar os documentos `.docx` institucionais como templates base (Poder Executivo e Poder Legislativo), substituindo apenas os campos dinâmicos:
+  - **Parágrafo de introdução**: substitui o período (quadrimestre, semestre e ano) de acordo com os filtros selecionados.
+  - **Linha de fonte**: substitui a data de extração pela data informada pelo usuário.
+  - **Tabela**: remove os dados de exemplo do template e popula com os entes críticos reais (acima dos limites de Alerta, Prudencial e Máximo), usando "Prefeitura Municipal" ou "Câmara Municipal" conforme o poder, e os rótulos de situação conforme o modelo institucional ("Acima do Limite de Alerta", "Acima do Limite Prudencial", "Acima do Limite Máximo").
+- Toda a formatação original dos templates (fontes, bordas, alinhamentos, assinaturas) é preservada integralmente.
+
+---
+
 ## [1.5.0] - 2026-05-11
 
 ### Added

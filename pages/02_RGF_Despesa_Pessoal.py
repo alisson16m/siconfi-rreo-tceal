@@ -58,7 +58,7 @@ st.divider()
 
 # ── Filtros ────────────────────────────────────────────────────────────────────
 
-col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 2, 1, 1])
+col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 2, 2, 2, 1, 1, 2])
 
 ano_atual = datetime.now().year
 
@@ -91,6 +91,14 @@ with col5:
 
 with col6:
     nr_sem: int = st.selectbox("Semestre", [1, 2], index=1, format_func=lambda x: f"{x}º")
+
+with col7:
+    data_extracao_dt = st.date_input(
+        "Data de Extração (Siconfi)",
+        value=datetime.now().date(),
+        format="DD/MM/YYYY",
+    )
+    data_extracao_str = data_extracao_dt.strftime("%d/%m/%Y")
 
 st.divider()
 
@@ -220,7 +228,10 @@ col_dl1, col_dl2 = st.columns(2)
 with col_dl1:
     if st.button("⬇ Gerar Termo de Alerta (.docx)", use_container_width=True, key="btn_alerta"):
         with st.spinner("Gerando Termo de Alerta..."):
-            docx_bytes = gerar_alerta_docx(resultado, _nr_quad_dl, _nr_sem_dl)
+            docx_bytes = gerar_alerta_docx(
+                resultado, _nr_quad_dl, _nr_sem_dl,
+                data_extracao=data_extracao_str,
+            )
         st.download_button(
             label="📥 Baixar Termo de Alerta",
             data=docx_bytes,
