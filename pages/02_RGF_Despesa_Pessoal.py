@@ -205,7 +205,10 @@ if rows:
     styler = (
         df.style
         .apply(_highlight, axis=1)
-        .format({"% DTP/RCL": lambda v: _fmt_pct(v) if v is not None else "—"})
+        .format({
+            "População": lambda v: f"{v:,.0f}".replace(",", ".") if v else "—",
+            "% DTP/RCL": lambda v: _fmt_pct(v) if v is not None else "—",
+        })
     )
     altura = min(800, max(200, 38 + len(df) * 35))
     st.dataframe(styler, use_container_width=True, height=altura)
