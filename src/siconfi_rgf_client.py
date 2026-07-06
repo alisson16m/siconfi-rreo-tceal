@@ -44,6 +44,7 @@ class ResultadoEnteRGF:
     situacao: Situacao
     periodo_tipo: str  # "Q" quadrimestral | "S" semestral
     nr_periodo: int
+    populacao: int = 0
 
 
 @dataclass
@@ -78,7 +79,7 @@ def _extrair_percentual_dtp(items: list[dict]) -> float | None:
 
         try:
             pct = float(valor)
-            if 0.0 <= pct <= 100.0:
+            if pct >= 0.0:
                 return pct
         except (TypeError, ValueError):
             pass
@@ -180,6 +181,7 @@ def consultar_todos_entes(
                 situacao=classificar(pct, esfera, poder),
                 periodo_tipo=tipo,
                 nr_periodo=nr_periodo,
+                populacao=ente.populacao,
             )
         return None
 

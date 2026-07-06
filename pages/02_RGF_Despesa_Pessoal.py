@@ -174,10 +174,13 @@ col_m5.metric("Sem dados (não enviaram)", len(resultado.entes_sem_dados))
 st.divider()
 
 # Tabela com highlight por situação
+_pop_por_nome = {e.nome: e.populacao for e in ENTES_AL}
+
 rows = []
 for ente in resultado.entes_com_dados:
     rows.append({
         "Ente Fiscal": ente.nome,
+        "População": ente.populacao,
         "% DTP/RCL": ente.percentual_dtp,
         "Período": f"{ente.nr_periodo}º {'Quad.' if ente.periodo_tipo == 'Q' else 'Sem.'}",
         "Situação": _LABEL_SITUACAO.get(ente.situacao, ente.situacao.value),
@@ -185,6 +188,7 @@ for ente in resultado.entes_com_dados:
 for nome in resultado.entes_sem_dados:
     rows.append({
         "Ente Fiscal": nome,
+        "População": _pop_por_nome.get(nome, 0),
         "% DTP/RCL": None,
         "Período": "—",
         "Situação": _LABEL_SITUACAO[Situacao.SEM_DADOS],
