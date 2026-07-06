@@ -80,8 +80,13 @@ def _rodape_legal(doc: Document) -> None:
     r2.italic = True
 
 
-def _subtitulo_padrao(resultado: ResultadoConsultaRGF, nr_quadrimestre: int, nr_semestre: int) -> str:
-    label_periodo = label_periodo_completo(nr_quadrimestre, nr_semestre)
+def _subtitulo_padrao(
+    resultado: ResultadoConsultaRGF,
+    nr_quadrimestre: int,
+    nr_semestre: int,
+    tipo_periodo: str = "A",
+) -> str:
+    label_periodo = label_periodo_completo(nr_quadrimestre, nr_semestre, tipo_periodo)
     esfera = _ESFERA_LABEL.get(resultado.esfera, resultado.esfera)
     poder = _PODER_LABEL.get(resultado.poder, resultado.poder)
     return (
@@ -144,6 +149,7 @@ def gerar_alerta_docx(
     nr_quadrimestre: int,
     nr_semestre: int,
     data_extracao: str | None = None,
+    tipo_periodo: str = "A",
 ) -> bytes:
     """Gera Termo de Alerta .docx usando o modelo institucional como base.
 
@@ -157,6 +163,8 @@ def gerar_alerta_docx(
         nr_semestre: Número do semestre consultado.
         data_extracao: Data de extração dos dados no formato DD/MM/AAAA.
                        Se None, usa a data atual.
+        tipo_periodo: 'Q' só quadrimestral | 'S' só semestral | 'A' ambos (padrão).
+                      Define quais trechos do período aparecem no texto do alerta.
 
     Returns:
         Bytes do documento .docx gerado.
@@ -177,18 +185,30 @@ def gerar_alerta_docx(
     #   run[5] = " "
     #   run[6] = "e Xº Semestre " (contém o ordinal do semestre)
     #   run[7] = "de AAAA" (contém o ano)
+    # Conforme tipo_periodo, os trechos de quadrimestre e/ou semestre são
+    # esvaziados para que só apareça no texto o período efetivamente selecionado.
     para_intro = doc.paragraphs[4]
     runs = para_intro.runs
 
     nr_quad_ord = _ORDINAL_BR.get(nr_quadrimestre, f"{nr_quadrimestre}º")
     nr_sem_ord  = _ORDINAL_BR.get(nr_semestre,    f"{nr_semestre}º")
 
-    # Substitui número do quadrimestre (run 3 é apenas o dígito)
-    if len(runs) > 3:
-        runs[3].text = nr_quad_ord[:-1]  # só o número, sem o "º" (run 4 tem "º Quadrimestre")
-    # Substitui ordinal do semestre no run 6
-    if len(runs) > 6:
-        runs[6].text = f"e {nr_sem_ord} Semestre "
+    if tipo_periodo == "S":
+        # Só semestral: remove o trecho do quadrimestre (runs 3, 4 e 5)
+        if len(runs) > 3:
+            runs[3].text = ""
+        if len(runs) > 4:
+            runs[4].text = ""
+        if len(runs) > 5:
+            runs[5].text = ""
+        if len(runs) > 6:
+            runs[6].text = f"{nr_sem_ord} Semestre "
+    else:
+        if len(runs) > 3:
+            runs[3].text = nr_quad_ord[:-1]  # só o número, sem o "º" (run 4 tem "º Quadrimestre")
+        if len(runs) > 6:
+            # Só quadrimestral: remove o trecho "e Xº Semestre"
+            runs[6].text = "" if tipo_periodo == "Q" else f"e {nr_sem_ord} Semestre "
     # Substitui ano no run 7
     if len(runs) > 7:
         runs[7].text = f"de {resultado.exercicio}"
@@ -260,6 +280,7 @@ def gerar_relatorio_docx(
     resultado: ResultadoConsultaRGF,
     nr_quadrimestre: int,
     nr_semestre: int,
+    tipo_periodo: str = "A",
 ) -> bytes:
     """Gera Relatório de Gestão Fiscal .docx com todos os entes e análise LC 178/2021.
 
@@ -267,12 +288,17 @@ def gerar_relatorio_docx(
         resultado: Resultado da consulta RGF.
         nr_quadrimestre: Número do quadrimestre consultado.
         nr_semestre: Número do semestre consultado.
+        tipo_periodo: 'Q' só quadrimestral | 'S' só semestral | 'A' ambos (padrão).
 
     Returns:
         Bytes do documento .docx.
     """
     doc = Document()
-    _cabecalho(doc, "RELATÓRIO DE GESTÃO FISCAL — DESPESA COM PESSOAL", _subtitulo_padrao(resultado, nr_quadrimestre, nr_semestre))
+    _cabecalho(
+        doc,
+        "RELATÓRIO DE GESTÃO FISCAL — DESPESA COM PESSOAL",
+        _subtitulo_padrao(resultado, nr_quadrimestre, nr_semestre, tipo_periodo),
+    )
 
     # Seção 1 — Resumo por situação
     doc.add_heading("1. Resumo por Situação", level=2)

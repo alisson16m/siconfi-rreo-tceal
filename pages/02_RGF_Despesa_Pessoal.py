@@ -118,7 +118,7 @@ consultar = st.button(
 
 if consultar:
     total_entes = sum(1 for e in ENTES_AL if e.esfera == esfera_cod)
-    label_periodo = label_periodo_completo(nr_quad, nr_sem)
+    label_periodo = label_periodo_completo(nr_quad, nr_sem, tipo_periodo_cod)
 
     logger.info(
         "Consulta RGF iniciada: exercicio=%d, esfera=%s, poder=%s, periodo=%s (%d entes)",
@@ -221,6 +221,7 @@ st.divider()
 # ── Botões de download ─────────────────────────────────────────────────────────
 
 _params = st.session_state.get(_SK_PARAMS, params_atuais)
+_tipo_periodo_dl = _params[3]
 _nr_quad_dl, _nr_sem_dl = _params[4], _params[5]
 
 col_dl1, col_dl2 = st.columns(2)
@@ -231,6 +232,7 @@ with col_dl1:
             docx_bytes = gerar_alerta_docx(
                 resultado, _nr_quad_dl, _nr_sem_dl,
                 data_extracao=data_extracao_str,
+                tipo_periodo=_tipo_periodo_dl,
             )
         st.download_button(
             label="📥 Baixar Termo de Alerta",
@@ -243,7 +245,9 @@ with col_dl1:
 with col_dl2:
     if st.button("⬇ Gerar Relatório de Gestão Fiscal (.docx)", use_container_width=True, key="btn_relatorio"):
         with st.spinner("Gerando Relatório..."):
-            docx_bytes = gerar_relatorio_docx(resultado, _nr_quad_dl, _nr_sem_dl)
+            docx_bytes = gerar_relatorio_docx(
+                resultado, _nr_quad_dl, _nr_sem_dl, tipo_periodo=_tipo_periodo_dl
+            )
         st.download_button(
             label="📥 Baixar Relatório de Gestão Fiscal",
             data=docx_bytes,

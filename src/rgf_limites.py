@@ -58,11 +58,24 @@ def get_limite_maximo(esfera: str, poder: str) -> float:
     return limite.maximo if limite else 0.0
 
 
-def label_periodo_completo(nr_quadrimestre: int, nr_semestre: int) -> str:
-    """Retorna label combinado do período consultado.
+def label_periodo_completo(
+    nr_quadrimestre: int, nr_semestre: int, tipo_periodo: str = "A"
+) -> str:
+    """Retorna label do período consultado, conforme o tipo de período selecionado.
 
-    Exemplo: label_periodo_completo(3, 2) → '3º Quadrimestre e 2º Semestre'
+    Args:
+        nr_quadrimestre: Número do quadrimestre consultado.
+        nr_semestre: Número do semestre consultado.
+        tipo_periodo: 'Q' só quadrimestral | 'S' só semestral | 'A' ambos (padrão).
+
+    Exemplo: label_periodo_completo(3, 2, "A") → '3º Quadrimestre e 2º Semestre'
+    Exemplo: label_periodo_completo(3, 2, "Q") → '3º Quadrimestre'
+    Exemplo: label_periodo_completo(3, 2, "S") → '2º Semestre'
     """
     q = _ORDINAL.get(nr_quadrimestre, f"{nr_quadrimestre}º")
     s = _ORDINAL.get(nr_semestre, f"{nr_semestre}º")
+    if tipo_periodo == "Q":
+        return f"{q} Quadrimestre"
+    if tipo_periodo == "S":
+        return f"{s} Semestre"
     return f"{q} Quadrimestre e {s} Semestre"
