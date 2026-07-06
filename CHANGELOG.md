@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.4] - 2026-07-06
+
+### Added
+- Termo de Alerta de Despesa com Pessoal agora lista, ao final do documento, os entes que não enviaram dados ao SICONFI até a data de extração, com um parágrafo introdutório seguido de lista numerada. Antes, essa informação só aparecia no Relatório de Gestão Fiscal completo.
+
+---
+
 ## [1.5.3] - 2026-07-06
 
 ### Removed
