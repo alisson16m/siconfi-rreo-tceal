@@ -271,6 +271,18 @@ def gerar_alerta_docx(
             situacao=situacao_label,
         )
 
+    # ── Entes sem dados no SICONFI ────────────────────────────────────────────
+    if resultado.entes_sem_dados:
+        doc.add_paragraph()
+        doc.add_paragraph(
+            "Relacionam-se abaixo os entes que, até a data de extração dos "
+            f"dados ({data_str}), não haviam enviado ao SICONFI as "
+            "informações referentes à Despesa com Pessoal (RGF Anexo 01) "
+            "no período consultado:"
+        )
+        for i, nome in enumerate(resultado.entes_sem_dados, start=1):
+            doc.add_paragraph(f"{i}. {nome}")
+
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
