@@ -11,7 +11,13 @@ import streamlit as st
 
 from src.municipios_al import ENTES_AL, Ente
 from src.pdf_parser import parse_pdf
-from src.report_builder import _AR, _EM, _g, _pivot_items, build_pdf, build_xlsx
+from src.report_builder import (
+    _pivot_items,
+    build_pdf,
+    build_xlsx,
+    total_despesas_empenhadas,
+    total_receitas_realizadas,
+)
 from src.siconfi_client import (
     SiconfiEmptyResponseError,
     SiconfiInvalidJsonError,
@@ -30,10 +36,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-# ── Constantes internas da API usadas para calcular as métricas de resumo ─────
-_CONTAS_RECEITA = ("ReceitasCorrentes", "ReceitasCorrentesIntra", "ReceitasDeCapital")
-_CONTAS_DESPESA = ("DespesasCorrentes", "DespesasDeCapital")
 
 # ── Chaves de session_state — aba SICONFI ─────────────────────────────────────
 _SK_RESP     = "siconfi_response"
@@ -148,12 +150,24 @@ def _render_painel(entes_ordenados: list[Ente]) -> None:
     )
     anos_filtrados = sorted(filtro_anos, reverse=True)
 
+    # True → entregou; False → não entregou; None → consulta falhou (inconclusivo)
+    _SIMBOLO = {True: "✅", False: "❌", None: "❓"}
     rows: dict[str, dict[str, str]] = {}
+    houve_falha_consulta = False
     for ente in entes_filtrados:
-        rows[ente.nome] = {
-            str(ano): "✅" if painel_raw.get(ano, {}).get(ente.id_ente) else "❌"
-            for ano in anos_filtrados
-        }
+        linha: dict[str, str] = {}
+        for ano in anos_filtrados:
+            status = painel_raw.get(ano, {}).get(ente.id_ente)
+            if status is None:
+                houve_falha_consulta = True
+            linha[str(ano)] = _SIMBOLO[status]
+        rows[ente.nome] = linha
+
+    if houve_falha_consulta:
+        st.warning(
+            "⚠️ Células com **❓** indicam entes cuja consulta ao SICONFI falhou "
+            "(resultado inconclusivo). Clique em **Carregar Dados** novamente."
+        )
     df = pd.DataFrame.from_dict(rows, orient="index")
     df.index.name = "Ente Fiscal"
 
@@ -305,8 +319,8 @@ with tab_relatorio:
             response.data_status = _cached_fetch_status(ente.id_ente, exercicio)
 
             pivot = _pivot_items(response.items)
-            total_receitas = sum(_g(pivot, c, _AR) for c in _CONTAS_RECEITA)
-            total_despesas = sum(_g(pivot, c, _EM) for c in _CONTAS_DESPESA)
+            total_receitas = total_receitas_realizadas(pivot)
+            total_despesas = total_despesas_empenhadas(pivot)
 
             st.session_state[_SK_RESP]     = response
             st.session_state[_SK_NOME]     = ente.nome
@@ -445,8 +459,8 @@ with tab_upload:
                         exercicio=pdf_exercicio,
                     )
                     pdf_pivot = _pivot_items(pdf_response.items)
-                    pdf_total_receitas = sum(_g(pdf_pivot, c, _AR) for c in _CONTAS_RECEITA)
-                    pdf_total_despesas = sum(_g(pdf_pivot, c, _EM) for c in _CONTAS_DESPESA)
+                    pdf_total_receitas = total_receitas_realizadas(pdf_pivot)
+                    pdf_total_despesas = total_despesas_empenhadas(pdf_pivot)
 
                     st.session_state[_SK_PDF_RESP]     = pdf_response
                     st.session_state[_SK_PDF_NOME]     = pdf_nome_ente.strip()

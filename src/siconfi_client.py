@@ -179,7 +179,9 @@ def fetch_rreo_anexo1(id_ente: str, exercicio: int, esfera: str) -> SiconfiRespo
     ) from last_exception
 
 
-def fetch_data_status(id_ente: str, exercicio: int) -> str | None:
+def fetch_data_status(
+    id_ente: str, exercicio: int, raise_on_error: bool = False
+) -> str | None:
     """
     Busca a data de entrega/homologação do RREO 6º bimestre no SICONFI.
 
@@ -189,11 +191,14 @@ def fetch_data_status(id_ente: str, exercicio: int) -> str | None:
     Args:
         id_ente: Código IBGE do ente.
         exercicio: Ano do exercício.
+        raise_on_error: se True, propaga falhas de rede/API em vez de
+            retornar None — permite ao chamador distinguir "não entregou"
+            de "consulta falhou".
 
     Returns:
         String ISO-8601 da data de entrega (ex: '2026-01-30T11:34:12Z'),
-        ou None se não encontrado ou em caso de falha de rede (não bloqueia
-        o fluxo principal — o rodapé simplesmente omite a data).
+        ou None se não encontrado ou (com raise_on_error=False) em caso de
+        falha de rede (não bloqueia o fluxo principal — o rodapé omite a data).
     """
     params = {"id_ente": str(id_ente), "an_referencia": exercicio}
     try:
@@ -201,6 +206,8 @@ def fetch_data_status(id_ente: str, exercicio: int) -> str | None:
         resp.raise_for_status()
         items = resp.json().get("items", [])
     except Exception as exc:
+        if raise_on_error:
+            raise
         logger.warning("fetch_data_status falhou para ente %s / %d: %s", id_ente, exercicio, exc)
         return None
 
@@ -216,25 +223,34 @@ def fetch_data_status(id_ente: str, exercicio: int) -> str | None:
 
 def fetch_status_todos_entes_ano(
     exercicio: int, id_entes: frozenset[str]
-) -> dict[str, bool]:
+) -> dict[str, bool | None]:
     """
-    Retorna {id_ente: entregou} para todos os entes informados no exercício.
+    Retorna {id_ente: status} para todos os entes informados no exercício.
 
     Faz consultas individuais ao /extrato_entregas em paralelo (10 workers).
-    Retorna True para entes com data_status não-nulo, False caso contrário.
+
+    Status por ente:
+        True  — entregou (data_status encontrada);
+        False — API respondeu, mas sem registro de entrega;
+        None  — consulta falhou (rede/API): resultado inconclusivo, não deve
+                ser exibido como "não entregou".
     """
     def _fetch_one(id_ente: str) -> tuple[str, bool]:
-        data_status = fetch_data_status(id_ente, exercicio)
+        data_status = fetch_data_status(id_ente, exercicio, raise_on_error=True)
         return id_ente, data_status is not None
 
-    resultado: dict[str, bool] = {}
+    resultado: dict[str, bool | None] = {}
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(_fetch_one, eid): eid for eid in id_entes}
         for future in as_completed(futures):
+            eid = futures[future]
             try:
-                eid, entregou = future.result()
+                _, entregou = future.result()
                 resultado[eid] = entregou
             except Exception as exc:
-                logger.warning("fetch_status_todos_entes_ano: erro ao consultar ente: %s", exc)
+                logger.warning(
+                    "fetch_status_todos_entes_ano: falha ao consultar ente %s: %s", eid, exc
+                )
+                resultado[eid] = None
 
     return resultado

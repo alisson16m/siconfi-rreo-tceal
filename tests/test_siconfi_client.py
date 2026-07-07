@@ -236,3 +236,34 @@ class TestFetchDataStatus:
             result = fetch_data_status("2700300", 2025)
 
         assert result is None
+
+    def test_propaga_erro_de_rede_quando_raise_on_error(self):
+        with patch("src.siconfi_client.requests.get") as mock_get:
+            mock_get.side_effect = requests.ConnectionError("sem rede")
+            with pytest.raises(requests.ConnectionError):
+                fetch_data_status("2700300", 2025, raise_on_error=True)
+
+
+class TestFetchStatusTodosEntesAno:
+    """Painel de Entregas: falha de consulta (None) não pode virar 'não entregou' (False)."""
+
+    @staticmethod
+    def _fake_get(url, params=None, timeout=None):
+        eid = params["id_ente"]
+        if eid == "1111111":  # entregou
+            return _make_mock_response(_EXTRATO_PAYLOAD)
+        if eid == "2222222":  # API OK, sem entrega
+            return _make_mock_response({"items": [], "count": 0})
+        raise requests.ConnectionError("sem rede")  # 3333333 — falha
+
+    def test_tres_estados_distintos(self):
+        from src.siconfi_client import fetch_status_todos_entes_ano
+
+        with patch("src.siconfi_client.requests.get", side_effect=self._fake_get):
+            resultado = fetch_status_todos_entes_ano(
+                2025, frozenset({"1111111", "2222222", "3333333"})
+            )
+
+        assert resultado["1111111"] is True
+        assert resultado["2222222"] is False
+        assert resultado["3333333"] is None  # inconclusivo, não "não entregou"

@@ -171,6 +171,14 @@ col_m3.metric("Prudencial", contagem[Situacao.PRUDENCIAL])
 col_m4.metric("Acima do Máximo", contagem[Situacao.MAXIMO])
 col_m5.metric("Sem dados (não enviaram)", len(resultado.entes_sem_dados))
 
+if resultado.entes_falha_consulta:
+    st.warning(
+        f"⚠️ **{len(resultado.entes_falha_consulta)} ente(s) não puderam ser consultados** "
+        "por falha de comunicação com a API do SICONFI e **não constam** da tabela nem do "
+        "Termo de Alerta. Refaça a consulta antes de gerar documentos oficiais: "
+        + ", ".join(resultado.entes_falha_consulta)
+    )
+
 st.divider()
 
 # Tabela com highlight por situação

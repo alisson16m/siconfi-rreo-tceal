@@ -13,7 +13,6 @@ from datetime import datetime
 from typing import Any
 
 import openpyxl
-from openpyxl.styles import numbers as xl_numbers
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -141,6 +140,45 @@ def _g(pivot: dict, conta: str | None, coluna: str) -> float:
     return float(v) if v else 0.0
 
 
+# ── Totais canônicos ──────────────────────────────────────────────────────────
+# Fonte única dos totais exibidos na UI e nos documentos (Bloco C), evitando
+# divergência entre métrica em tela e XLSX/PDF gerados.
+
+def total_receitas_realizadas(pivot: dict) -> float:
+    """Total de receitas realizadas (arrecadadas até o bimestre).
+
+    Usa o cod_conta 'TotalReceitas' da API; na ausência, soma correntes,
+    intra-orçamentárias correntes e de capital.
+    """
+    total = _g(pivot, "TotalReceitas", _AR)
+    if total:
+        return total
+    return (
+        _g(pivot, "ReceitasCorrentes", _AR)
+        + _g(pivot, "ReceitasCorrentesIntra", _AR)
+        + _g(pivot, "ReceitasDeCapital", _AR)
+    )
+
+
+def total_despesas_empenhadas(pivot: dict) -> float:
+    """Total de despesas empenhadas até o bimestre.
+
+    Usa o cod_conta 'TotalDespesas' da API; na ausência, soma correntes,
+    de capital, intra-orçamentárias e reserva de contingência — mesma
+    composição do TOTAL DAS DESPESAS (linha 57) do Apêndice I.
+    """
+    total = _g(pivot, "TotalDespesas", _EM)
+    if total:
+        return total
+    return (
+        _g(pivot, "DespesasCorrentes", _EM)
+        + _g(pivot, "DespesasCorrentesIntra", _EM)
+        + _g(pivot, "DespesasDeCapital", _EM)
+        + _g(pivot, "DespesasDeCapitalIntra", _EM)
+        + _g(pivot, "ReservaDeContingencia", _EM)
+    )
+
+
 # ── Valores por linha ─────────────────────────────────────────────────────────
 
 def _receita_vals(pivot: dict, conta: str | None, total_ar: float) -> tuple[float, ...]:
@@ -179,11 +217,7 @@ def _fill_bloco_a(ws, pivot: dict) -> dict[str, list[float]]:
     Preenche as linhas 6-38 do Bloco A no worksheet.
     Retorna cache {row_key: [pi, pa, ar]} para uso nas linhas calculadas.
     """
-    total_ar = (
-        _g(pivot, "ReceitasCorrentes", _AR)
-        + _g(pivot, "ReceitasCorrentesIntra", _AR)
-        + _g(pivot, "ReceitasDeCapital", _AR)
-    )
+    total_ar = total_receitas_realizadas(pivot)
 
     cache: dict[int, tuple[float, ...]] = {}
 
@@ -328,12 +362,8 @@ def _fmt_val(v: float | None, is_pct: bool = False) -> str:
     return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _build_table_a(pivot: dict) -> tuple[list[list], list[int]]:
-    total_ar = (
-        _g(pivot, "ReceitasCorrentes", _AR)
-        + _g(pivot, "ReceitasCorrentesIntra", _AR)
-        + _g(pivot, "ReceitasDeCapital", _AR)
-    )
+def _build_table_a(pivot: dict) -> tuple[list[list], list[int], list[int]]:
+    total_ar = total_receitas_realizadas(pivot)
     rows: list[list] = [["Receitas", "Prev. Inicial (a)", "Prev. Atualizada (b)",
                           "Arrec. (c)", "Diferença (c-b)", "A.V.%", "A.H.%"]]
     bold_rows: list[int] = []
@@ -467,12 +497,8 @@ def build_pdf(response: SiconfiResponse) -> bytes:
     story.append(tbl_b)
     story.append(Spacer(1, 0.4 * cm))
 
-    total_ar = (
-        _g(pivot, "ReceitasCorrentes", _AR)
-        + _g(pivot, "ReceitasCorrentesIntra", _AR)
-        + _g(pivot, "ReceitasDeCapital", _AR)
-    )
-    total_em = _g(pivot, "TotalDespesas", _EM)
+    total_ar = total_receitas_realizadas(pivot)
+    total_em = total_despesas_empenhadas(pivot)
     resultado = total_ar - total_em
     sinal = "SUPERÁVIT" if resultado >= 0 else "DÉFICIT"
 

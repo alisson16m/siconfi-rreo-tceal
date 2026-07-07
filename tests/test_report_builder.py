@@ -14,6 +14,8 @@ from src.report_builder import (
     _pivot_items,
     build_pdf,
     build_xlsx,
+    total_despesas_empenhadas,
+    total_receitas_realizadas,
 )
 from src.siconfi_client import SiconfiResponse
 
@@ -190,6 +192,57 @@ class TestBuildTableB:
         assert dc_row[1] == _fmt_val(954927141)        # DI
         assert dc_row[2] == _fmt_val(1147906628.29)    # DA
         assert dc_row[3] == _fmt_val(1114371621.84)    # EM
+
+
+# ── Totais canônicos (UI e documentos devem usar a mesma base) ───────────────
+
+class TestTotaisCanonicos:
+    def test_total_despesas_usa_total_da_api(self, arapiraca_response):
+        pivot = _pivot_items(arapiraca_response.items)
+        # Deve incluir intra-orçamentárias e reserva (= TotalDespesas da API),
+        # não apenas DespesasCorrentes + DespesasDeCapital
+        assert total_despesas_empenhadas(pivot) == pytest.approx(1404948023.86, rel=1e-6)
+
+    def test_total_receitas_usa_total_da_api(self, arapiraca_response):
+        pivot = _pivot_items(arapiraca_response.items)
+        assert total_receitas_realizadas(pivot) == pytest.approx(1482725070.57, rel=1e-6)
+
+    def test_total_despesas_fallback_sem_conta_total(self):
+        # Sem TotalDespesas no pivot: soma componentes incluindo intra e reserva
+        pivot = {
+            "DespesasCorrentes":      {"DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)": 100.0},
+            "DespesasCorrentesIntra": {"DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)": 10.0},
+            "DespesasDeCapital":      {"DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)": 50.0},
+            "DespesasDeCapitalIntra": {"DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)": 5.0},
+            "ReservaDeContingencia":  {"DESPESAS EMPENHADAS ATÉ O BIMESTRE (f)": 1.0},
+        }
+        assert total_despesas_empenhadas(pivot) == pytest.approx(166.0)
+
+    def test_total_receitas_fallback_sem_conta_total(self):
+        pivot = {
+            "ReceitasCorrentes":      {"Até o Bimestre (c)": 200.0},
+            "ReceitasCorrentesIntra": {"Até o Bimestre (c)": 20.0},
+            "ReceitasDeCapital":      {"Até o Bimestre (c)": 30.0},
+        }
+        assert total_receitas_realizadas(pivot) == pytest.approx(250.0)
+
+    def test_total_despesas_coincide_com_bloco_c_do_xlsx(self, arapiraca_response):
+        import io as _io
+        pivot = _pivot_items(arapiraca_response.items)
+        ws = openpyxl.load_workbook(_io.BytesIO(build_xlsx(arapiraca_response))).active
+        # Bloco C, linha 66: DESPESAS EXECUTADAS (Empenhadas)
+        assert ws.cell(row=66, column=3).value == pytest.approx(
+            total_despesas_empenhadas(pivot), rel=1e-9
+        )
+
+    def test_total_receitas_coincide_com_bloco_c_do_xlsx(self, arapiraca_response):
+        import io as _io
+        pivot = _pivot_items(arapiraca_response.items)
+        ws = openpyxl.load_workbook(_io.BytesIO(build_xlsx(arapiraca_response))).active
+        # Bloco C, linha 65: RECEITAS REALIZADAS
+        assert ws.cell(row=65, column=3).value == pytest.approx(
+            total_receitas_realizadas(pivot), rel=1e-9
+        )
 
 
 # ── build_xlsx ────────────────────────────────────────────────────────────────

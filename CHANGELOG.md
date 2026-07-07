@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.5] - 2026-07-07
+
+### Fixed
+- **Totais unificados entre tela e documentos**: as métricas "Despesas Empenhadas" e "Resultado Orçamentário" exibidas na página de Prestações de Contas usavam soma parcial (sem intra-orçamentárias e reserva de contingência), divergindo do total do XLSX/PDF gerados (diferença de ~R$ 97 mi no caso Arapiraca/2025). Agora UI, XLSX e PDF usam as mesmas funções canônicas `total_receitas_realizadas()` e `total_despesas_empenhadas()` em `report_builder.py`, com testes de consistência.
+- **Falha de consulta não é mais tratada como "ente sem dados"**: no módulo RGF, entes cuja consulta à API falhou (rede/HTTP) eram listados como "sem dados" — e, portanto, citados no Termo de Alerta oficial como se não tivessem enviado o demonstrativo. Agora ficam em `entes_falha_consulta`, exibidos em aviso separado na tela e **fora** do Termo de Alerta. O Painel de Entregas também passa a distinguir: ✅ entregou, ❌ não entregou, ❓ consulta falhou.
+- CI (GitHub Actions) corrigido para disparar na branch `master` (estava configurado para `main`, que não existe — os testes nunca rodavam no push).
+
+### Removed
+- Hook `Stop` do Claude Code que fazia `git add/commit/push` automático ao fim de cada sessão, sem revisão.
+
+---
+
 ## [1.5.4] - 2026-07-06
 
 ### Added

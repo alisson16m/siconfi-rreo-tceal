@@ -57,3 +57,6 @@ desktop.ini
 # Build artifacts
 *.pyc
 *.pyd
+
+# Documentos de referência locais (não versionados)
+Modelo de Relatório - Aspectos Orçamentários.docx

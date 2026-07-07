@@ -15,7 +15,7 @@ import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import requests
 
@@ -52,10 +52,13 @@ class ResultadoConsultaRGF:
     """Resultado agregado da consulta RGF para todos os entes do esfera."""
 
     entes_com_dados: list[ResultadoEnteRGF]
-    entes_sem_dados: list[str]  # nomes dos entes sem dados disponíveis
+    entes_sem_dados: list[str]  # nomes dos entes que não enviaram dados (API respondeu vazio)
     exercicio: int
     esfera: str
     poder: str
+    # Entes cuja consulta falhou (rede/API): resultado inconclusivo — NÃO devem
+    # ser listados como "sem dados" em documentos oficiais.
+    entes_falha_consulta: list[str] = field(default_factory=list)
 
 
 def _extrair_percentual_dtp(items: list[dict]) -> float | None:
@@ -94,7 +97,11 @@ def _fetch_rgf_ente(
     periodicidade: str,
     poder: str,
 ) -> list[dict] | None:
-    """Busca itens RGF para um ente/período. Retorna lista de itens ou None.
+    """Busca itens RGF para um ente/período.
+
+    Returns:
+        Lista de itens (vazia se a API respondeu sem dados — ente não enviou),
+        ou None quando a consulta falhou (rede/API) — resultado inconclusivo.
 
     Args:
         periodicidade: 'Q' quadrimestral | 'S' semestral (parâmetro obrigatório da API).
@@ -113,8 +120,7 @@ def _fetch_rgf_ente(
         try:
             resp = requests.get(_BASE_URL_RGF, params=params, timeout=_TIMEOUT)
             resp.raise_for_status()
-            items = resp.json().get("items", [])
-            return items if items else None
+            return resp.json().get("items", [])
         except (requests.Timeout, requests.ConnectionError) as exc:
             last_exc = exc
             if attempt < _MAX_RETRIES:
@@ -157,9 +163,11 @@ def consultar_todos_entes(
 
     entes_com_dados: list[ResultadoEnteRGF] = []
     entes_sem_dados: list[str] = []
+    entes_falha_consulta: list[str] = []
     concluidos = 0
 
-    def _processar(ente: Ente) -> ResultadoEnteRGF | None:
+    def _processar(ente: Ente) -> tuple[ResultadoEnteRGF | None, bool]:
+        """Retorna (resultado, houve_falha_de_consulta)."""
         if tipo_periodo == "Q":
             periodos: list[tuple[int, str]] = [(nr_quadrimestre, "Q")]
         elif tipo_periodo == "S":
@@ -167,9 +175,11 @@ def consultar_todos_entes(
         else:  # "A" — tenta Q primeiro, S como fallback
             periodos = [(nr_quadrimestre, "Q"), (nr_semestre, "S")]
 
+        houve_falha = False
         for nr_periodo, tipo in periodos:
             items = _fetch_rgf_ente(ente, exercicio, nr_periodo, tipo, poder)
             if items is None:
+                houve_falha = True
                 continue
             pct = _extrair_percentual_dtp(items)
             if pct is None:
@@ -182,18 +192,18 @@ def consultar_todos_entes(
                 periodo_tipo=tipo,
                 nr_periodo=nr_periodo,
                 populacao=ente.populacao,
-            )
-        return None
+            ), False
+        return None, houve_falha
 
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
         futures = {executor.submit(_processar, e): e for e in entes_alvo}
         for future in as_completed(futures):
             ente = futures[future]
             try:
-                resultado = future.result()
+                resultado, houve_falha = future.result()
             except Exception as exc:
                 logger.warning("Erro não tratado ente %s: %s", ente.nome, exc)
-                resultado = None
+                resultado, houve_falha = None, True
 
             concluidos += 1
             if on_progress:
@@ -204,11 +214,14 @@ def consultar_todos_entes(
 
             if resultado is not None:
                 entes_com_dados.append(resultado)
+            elif houve_falha:
+                entes_falha_consulta.append(ente.nome)
             else:
                 entes_sem_dados.append(ente.nome)
 
     entes_com_dados.sort(key=lambda r: r.nome)
     entes_sem_dados.sort()
+    entes_falha_consulta.sort()
 
     return ResultadoConsultaRGF(
         entes_com_dados=entes_com_dados,
@@ -216,4 +229,5 @@ def consultar_todos_entes(
         exercicio=exercicio,
         esfera=esfera,
         poder=poder,
+        entes_falha_consulta=entes_falha_consulta,
     )

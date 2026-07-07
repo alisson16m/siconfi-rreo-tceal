@@ -4,9 +4,14 @@
 
 Ferramenta de apoio à auditoria externa do Tribunal de Contas do Estado de
 Alagoas (TCE-AL), desenvolvida pela Diretoria de Coordenação de Técnicos (DCT).
-Automatiza a consulta à API pública do SICONFI e gera o Apêndice I —
-Balanço Orçamentário (RREO Anexo 1) em XLSX e PDF para os 102 municípios de
-Alagoas e o Estado.
+Dois módulos, para os 102 municípios de Alagoas e o Estado:
+
+1. **Prestações de Contas (RREO)** — consulta a API pública do SICONFI (ou
+   extrai de PDF enviado) e gera o Apêndice I — Balanço Orçamentário
+   (RREO Anexo 1) em XLSX e PDF; inclui Painel de Entregas ao SICONFI.
+2. **RGF Despesa com Pessoal** — consulta o RGF Anexo 01, classifica os entes
+   conforme os limites da LRF (LC 101/2000) e gera Termo de Alerta e
+   Relatório de Gestão Fiscal em DOCX.
 
 ## Stack e dependências
 
@@ -21,19 +26,26 @@ Alagoas e o Estado.
 
 ```
 siconfi-rreo-tceal/
-├── app.py                    # Ponto de entrada Streamlit
+├── app.py                          # Entrypoint Streamlit (só navegação entre páginas)
+├── pages/
+│   ├── prestacoes_de_contas.py     # UI RREO: consulta, upload de PDF, painel de entregas
+│   └── 02_RGF_Despesa_Pessoal.py   # UI RGF: consulta, classificação LRF, geração de DOCX
 ├── src/
-│   ├── siconfi_client.py     # Cliente da API SICONFI (fetch + exceções)
-│   ├── report_builder.py     # Geração de XLSX e PDF
-│   └── municipios_al.py      # Lista de entes (102 municípios + Estado)
-├── templates/                # Templates XLSX oficiais do TCE-AL
+│   ├── siconfi_client.py           # Cliente API RREO + extrato_entregas (fetch + exceções)
+│   ├── siconfi_rgf_client.py       # Cliente API RGF (consulta paralela aos 102 entes)
+│   ├── report_builder.py           # Geração XLSX/PDF do Apêndice I + totais canônicos
+│   ├── rgf_report_builder.py       # Geração DOCX (Termo de Alerta e Relatório RGF)
+│   ├── rgf_limites.py              # Limites LRF e classificador de situação fiscal
+│   ├── pdf_parser.py               # Parser de PDF do RREO Anexo 1 (upload)
+│   └── municipios_al.py            # Lista de entes (102 municípios + Estado)
+├── templates/                      # Templates XLSX/DOCX oficiais do TCE-AL
 ├── tests/
-│   ├── fixtures/             # Respostas mockadas da API (JSON)
-│   └── test_*.py             # Testes unitários por módulo
+│   ├── fixtures/                   # Respostas mockadas da API (JSON) e PDFs de exemplo
+│   └── test_*.py                   # Testes unitários por módulo
 ├── .claude/
-│   └── commands/             # Skills (comandos personalizados) do Claude Code
-├── .github/workflows/ci.yml  # Pipeline de CI (GitHub Actions)
-└── VERSION                   # Versão atual do app
+│   └── commands/                   # Skills (comandos personalizados) do Claude Code
+├── .github/workflows/ci.yml        # Pipeline de CI (GitHub Actions, branch master)
+└── VERSION                         # Versão atual do app
 ```
 
 ## Parâmetros fixos da API SICONFI
@@ -58,7 +70,14 @@ Parâmetros variáveis:
   `SiconfiEmptyResponseError`, `SiconfiNetworkError`, `SiconfiInvalidJsonError`
 - Tipagem estrita com type hints em todas as funções públicas
 - Docstrings obrigatórias em funções e classes públicas
-- Formatação monetária sempre via `_fmt_brl()` em `app.py`
+- Formatação monetária sempre via `_fmt_brl()` em `pages/prestacoes_de_contas.py`
+- Totais de receitas/despesas exibidos ou impressos devem vir de
+  `total_receitas_realizadas()` / `total_despesas_empenhadas()` em
+  `report_builder.py` — nunca recalcular somas parciais localmente
+- Nas consultas em lote (RGF e Painel de Entregas), **nunca** tratar falha de
+  rede/API como "ente sem dados": falha é resultado inconclusivo
+  (`entes_falha_consulta` no RGF; `None` no painel) e não pode aparecer em
+  documento oficial como inadimplência
 
 ## Regras para alterações no código
 
@@ -90,9 +109,15 @@ Nunca carregue o projeto inteiro sem necessidade explícita.
 
 | Tipo de tarefa | Arquivos a ler |
 |---|---|
-| Alteração na integração com a API | `src/siconfi_client.py`, `tests/test_siconfi_client.py` |
-| Alteração na geração de relatórios | `src/report_builder.py`, `tests/test_report_builder.py` |
-| Alteração na interface (UI) | `app.py` |
+| Alteração na integração com a API RREO | `src/siconfi_client.py`, `tests/test_siconfi_client.py` |
+| Alteração na integração com a API RGF | `src/siconfi_rgf_client.py`, `tests/test_siconfi_rgf_client.py` |
+| Alteração na geração de XLSX/PDF (Apêndice I) | `src/report_builder.py`, `tests/test_report_builder.py` |
+| Alteração na geração de DOCX (RGF) | `src/rgf_report_builder.py`, `tests/test_rgf_report_builder.py` |
+| Alteração nos limites/classificação LRF | `src/rgf_limites.py`, `tests/test_rgf_report_builder.py` |
+| Alteração no parser de PDF | `src/pdf_parser.py`, `tests/test_pdf_parser.py` |
+| Alteração na UI de Prestações de Contas | `pages/prestacoes_de_contas.py` |
+| Alteração na UI do RGF | `pages/02_RGF_Despesa_Pessoal.py` |
+| Alteração na navegação/layout global | `app.py` |
 | Alteração na lista de municípios | `src/municipios_al.py`, `tests/test_municipios_al.py` |
 | Validação geral / CI | Todos os arquivos de `tests/` |
 
